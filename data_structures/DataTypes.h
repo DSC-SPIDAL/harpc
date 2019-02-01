@@ -24,6 +24,7 @@ enum DataType {
     const size_t _##type##_type = typeid(type).hash_code();
 
 TYPE_HASH(int);
+TYPE_HASH(char);
 TYPE_HASH(long);
 TYPE_HASH(float);
 TYPE_HASH(double);
@@ -35,6 +36,8 @@ MPI_Datatype getMPIDataType() {
     size_t hash = typeid(TYPE).hash_code();
     if (hash == _int_type) {
         return MPI_INT;
+    } else if (hash == _char_type) {
+        return MPI_CHAR;
     } else if (hash == _long_type) {
         return MPI_LONG;
     } else if (hash == _float_type) {
