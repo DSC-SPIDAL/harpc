@@ -40,7 +40,7 @@ const int TIME_ASYNC_ROTATE_END = tagCounter++;
 
 class KMeansWorker : public harp::Worker {
 
-    void execute(com::Communicator *comm) {
+    void execute(com::Communicator *comm, int argc, char *argv[]) {
 
         int iterations = 5;
         int numOfCentroids = 5;
@@ -80,7 +80,7 @@ class KMeansWorker : public harp::Worker {
             std::cout << "Serial : " << diff(TIME_BEFORE_SERIAL, TIME_AFTER_SERIAL) << std::endl;
 
 
-            printTable(centroids);
+            util::print::printTable(centroids);
             //printPartition(centroids->getPartition(0));
 
             deleteTable(points, true);
@@ -213,7 +213,7 @@ class KMeansWorker : public harp::Worker {
                                                         total(TIME_ASYNC_ROTATE_BEGIN, TIME_ASYNC_ROTATE_END) -
                                                         diff(TIME_BEFORE_WAIT, TIME_AFTER_WAIT) << std::endl;
 
-            printTable(myCentroids);
+            util::print::printTable(myCentroids);
             //printPartition(centroids->getPartition(0));
         }
 
@@ -231,7 +231,7 @@ class KMeansWorker : public harp::Worker {
 int main(int argc, char *argv[]) {
     KMeansWorker kMeansWorker;
     kMeansWorker.init(argc, argv);
-    kMeansWorker.setCommThreads(1);
+    kMeansWorker.setCommThreads(4);
     kMeansWorker.start();
     return 0;
 }

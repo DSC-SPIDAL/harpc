@@ -10,6 +10,8 @@ namespace harp {
         int worldSize;
 
         int comThreads = 1;//no of communication threads
+
+        bool initialized = false;
     public:
         void init(int argc, char *argv[]) {
             int provided;
@@ -23,18 +25,28 @@ namespace harp {
             MPI_Comm_size(MPI_COMM_WORLD, &this->worldSize);
 
             MPI_Comm_rank(MPI_COMM_WORLD, &this->workerId);
+
+            this->initialized = true;
         }
 
-        void start() {
-            com::Communicator comm(this->workerId, this->worldSize);
-            this->execute(&comm);
+        void start(int argc = 0, char *argv[] = NULL) {
+            if (!this->initialized) {
+                printf("Worker should be initialized");
+                return;
+            }
+            com::Communicator comm(this->workerId, this->worldSize, this->comThreads);
+            this->execute(&comm, argc, argv);
             MPI_Finalize();
         }
 
-        virtual void execute(com::Communicator *comm) = 0;
+        virtual void execute(com::Communicator *comm, int argc = 0, char *argv[] = NULL) = 0;
 
         void setCommThreads(int comThreads) {
             this->comThreads = comThreads;
+        }
+
+        bool isMaster() {
+            return this->workerId == 0;
         }
     };
 }

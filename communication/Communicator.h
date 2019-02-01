@@ -2,6 +2,7 @@
 #define HARPC_COMMUNICATOR_H
 
 #include <iostream>
+#include "../util/print.h"
 #include "../util/timing.h"
 #include "mpi.h"
 #include "../data_structures/DataStructures.h"
@@ -15,8 +16,6 @@ namespace harp {
         private:
             int workerId;
             int worldSize;
-
-            int comThreads;
 
             //Using separate task queues for each thread pool to prevent unnecessary locking
             //----------------------------------//
@@ -53,52 +52,116 @@ namespace harp {
                 );
 
                 int totalPartitionsInWorld = 0;
-                auto recvCounts = new int[worldSize];
-                auto displacements = new int[worldSize];
+                int *recvCounts = new int[worldSize];
+                int *displacements = new int[worldSize];
+                displacements[0] = 0;
                 for (int i = 0; i < worldSize; i++) {
-                    displacements[i] = totalPartitionsInWorld;
                     totalPartitionsInWorld += partitionCounts[i];
-                    recvCounts[i] = 1 + (partitionCounts[i] * 2);
+                    recvCounts[i] = 1 + (partitionCounts[i] * 2);//size + [{id,size}]
+                    if (i != 0) {
+                        displacements[i] = displacements[i - 1] + recvCounts[i];
+                    }
                 }
 
-                auto *worldPartitionMetaData = new int[worldSize +
-                                                       (totalPartitionsInWorld *
-                                                        2)];//1*worldSize(for sizes) + [{id,size}]
+                int worldPartitionMetaDataSize = worldSize +
+                                                 (totalPartitionsInWorld *
+                                                  2);  //1*worldSize(for sizes) + [{id,size}]
+                long *worldPartitionMetaData = new long[worldPartitionMetaDataSize];
 
-                long totalSize = 0;//total size of data
+                long thisNodeTotalDataSize = 0;//total size of data
 
-                auto *thisNodePartitionMetaData = new int[1 +
-                                                          (table->getPartitionCount() * 2)]; //totalSize + [{id,size}]
+                int thisNodeMetaSendSize = static_cast<int>(1 +
+                                                            (table->getPartitionCount() * 2));//totalSize + [{id,size}]
+                long *thisNodePartitionMetaData = new long[thisNodeMetaSendSize];
+
                 int pIdIndex = 1;
 
-                std::vector<TYPE> dataBuffer;
+                std::vector<TYPE> thisNodeDataBuffer;
                 for (const auto p : *table->getPartitions()) {
                     std::copy(p.second->getData(), p.second->getData() + p.second->getSize(),
-                              std::back_inserter(dataBuffer));
-                    totalSize += p.second->getSize();
+                              std::back_inserter(thisNodeDataBuffer));
+                    thisNodeTotalDataSize += p.second->getSize();
                     thisNodePartitionMetaData[pIdIndex++] = p.first;
                     thisNodePartitionMetaData[pIdIndex++] = p.second->getSize();
                 }
+                thisNodePartitionMetaData[0] = thisNodeTotalDataSize;
+
+//                std::cout << "Node " << workerId << " total size : " << thisNodeTotalDataSize << std::endl;
+//
+//                harp::util::print::printArray(thisNodePartitionMetaData, thisNodeMetaSendSize);
+
 
                 MPI_Allgatherv(
                         thisNodePartitionMetaData,
-                        static_cast<int>(1 + (table->getPartitionCount() * 2)),
-                        MPI_INT,
+                        thisNodeMetaSendSize,
+                        MPI_LONG,
                         worldPartitionMetaData,
                         recvCounts,
                         displacements,
-                        MPI_INT,
+                        MPI_LONG,
                         MPI_COMM_WORLD
                 );
 
-                if (workerId == 0) {
-                    for (int i = 0; i < worldSize +
-                                        (totalPartitionsInWorld * 2); i++) {
-                        std::cout << worldPartitionMetaData[i] << ",";
-                    }
+                // done meta data exchange
+//                if (workerId == 0) {
+//                    harp::util::print::printArray(worldPartitionMetaData, worldPartitionMetaDataSize);
+//                }
 
-                    std::cout << std::endl;
+                long totalDataSize = worldPartitionMetaData[0];
+                int tempLastIndex = 0;
+                recvCounts[0] = static_cast<int>(worldPartitionMetaData[0]); //todo cast?
+                displacements[0] = 0;
+                for (int i = 1; i < worldSize; i++) {
+                    int thisIndex = tempLastIndex + (partitionCounts[i - 1] * 2) + 1;
+                    displacements[i] = static_cast<int>(totalDataSize);
+                    totalDataSize += worldPartitionMetaData[thisIndex];
+                    recvCounts[i] = static_cast<int>(worldPartitionMetaData[thisIndex]);
+                    tempLastIndex = thisIndex;
                 }
+
+                MPI_Datatype dataType = getMPIDataType<TYPE>();
+
+                auto *worldDataBuffer = new TYPE[totalDataSize];
+                MPI_Allgatherv(
+                        &thisNodeDataBuffer[0],
+                        static_cast<int>(thisNodeTotalDataSize),
+                        dataType,
+                        worldDataBuffer,
+                        recvCounts,
+                        displacements,
+                        dataType,
+                        MPI_COMM_WORLD
+                );
+
+//                if (workerId == 0) {
+//                    harp::util::print::printArray(worldDataBuffer, totalDataSize);
+//                }
+
+                //now we have all data
+                auto *recvTab = new harp::ds::Table<TYPE>(table->getId());
+                int lastIndex = 0;
+                int metaIndex = 0;
+                for (int i = 0; i < worldSize; i++) {
+                    int noOfPartitions = partitionCounts[i];
+                    metaIndex++;
+                    for (int j = 0; j < noOfPartitions; j++) {
+                        int partitionId = static_cast<int>(worldPartitionMetaData[metaIndex++]);
+                        int partitionSize = static_cast<int>(worldPartitionMetaData[metaIndex++]);
+                        auto *partitionData = new TYPE[partitionSize];
+                        auto *partition = new harp::ds::Partition<TYPE>(partitionId, partitionData, partitionSize);
+                        std::copy(worldDataBuffer + lastIndex, worldDataBuffer + lastIndex + partitionSize,
+                                  partitionData);
+//                        if (workerId == 0) {
+//                            std::cout << "pSize:" << partitionSize << std::endl;
+//                            harp::util::print::printPartition(partition);
+//                        }
+                        lastIndex += partitionSize;
+                        recvTab->addPartition(partition);
+                    }
+                }
+
+                table->swap(recvTab);
+                harp::ds::util::deleteTable(recvTab, false);
             }
 
             template<class TYPE>
