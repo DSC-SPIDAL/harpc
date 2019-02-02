@@ -326,7 +326,6 @@ namespace harp {
 
             template<class TYPE>
             void asyncRotate(harp::ds::Table<TYPE> *table, int pid) {
-                util::timing::record(11);
                 auto partition = table->getPartition(pid);//take partition out
                 table->removePartition(pid, false);//this happens in the same thread all the time
                 auto *rotatingTable = new harp::ds::Table<TYPE>(table->getId());//create new table for rotation
@@ -370,9 +369,6 @@ namespace harp {
 
                 //assuming this happens always on the same thread
                 this->asyncTasks.push(std::move(rotateTaskFuture));
-
-                util::timing::record(12);
-                util::timing::diff(11, 12, true);
             }
 
             int getWorkerId() {
