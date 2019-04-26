@@ -13,6 +13,10 @@
 #include "timing.h"
 
 #include "print.h"
+#include <boost/filesystem/operations.hpp>
+#include <boost/filesystem/path.hpp>
+
+namespace fs = boost::filesystem;
 
 using namespace harp;
 using namespace harp::ds::util;
@@ -44,29 +48,49 @@ class KMeansWorker : public harp::Worker {
 
         int iterations = 5;
         int numOfCentroids = 5;
-        int vectorSize = 1000000;
+//        int vectorSize = 1000000;
+        int vectorSize = 10000;
         int numOfVectors = 100;
 
         double serialDuration = 0;
 
-        std::cout << "Starting.." << std::endl;
+        std::cout << "worker: " << comm->getWorkerId() << " is starting.." << std::endl;
 
         if (workerId == 0) {
-            //generate only if doesn't exist
+            // make directory if does not exist
+            std::string dirName = "/tmp/harp/kmeans";
+
+            if(!fs::is_directory(dirName)) {
+                cout << "directory " << dirName << " does not exist. Will try to create." << endl;
+                bool dirCreated = fs::create_directories(dirName);
+                if(dirCreated)
+                    cout << "directory " << dirName << " created." << endl;
+                else {
+                    cout << "directory " << dirName << " can not be created" << endl;
+                    return;
+                }
+            }
+            else
+                cout << "directory " << dirName << " already exists. " << endl;
+
+
+            //generate data only if doesn't exist
             std::ifstream censtream("/tmp/harp/kmeans/centroids");
             if (!censtream.good()) {
                 printf("Generating data in node 0\n");
                 util::generateKMeansData("/tmp/harp/kmeans", numOfVectors, vectorSize, worldSize, numOfCentroids);
             }
 
-            //running non distributed version in node 0
+            std::cout << "data generated" << std::endl;
+
+            //running non-distributed version in node 0
             auto *points = new harp::ds::Table<double>(0);
             for (int i = 0; i < worldSize; i++) {
                 util::readKMeansDataFromFile("/tmp/harp/kmeans/" + std::to_string(i), vectorSize, points,
                                              static_cast<int>(points->getPartitionCount()));
             }
 
-            std::cout << points->getPartitionCount() << std::endl;
+            std::cout << "partition count: " << points->getPartitionCount() << std::endl;
 
             auto *centroids = new harp::ds::Table<double>(1);
             util::readKMeansDataFromFile("/tmp/harp/kmeans/centroids", vectorSize, centroids);
@@ -77,10 +101,10 @@ class KMeansWorker : public harp::Worker {
             harp::kernels::kmeans(centroids, points, vectorSize, iterations);
             record(TIME_AFTER_SERIAL);
 
-            std::cout << "Serial : " << diff(TIME_BEFORE_SERIAL, TIME_AFTER_SERIAL) << std::endl;
+            std::cout << "Time for serial calculation: " << diff(TIME_BEFORE_SERIAL, TIME_AFTER_SERIAL) << std::endl;
 
 
-            util::print::printTable(centroids);
+//            util::print::printTable(centroids);
             //printPartition(centroids->getPartition(0));
 
             deleteTable(points, true);
@@ -88,7 +112,7 @@ class KMeansWorker : public harp::Worker {
 
         }
 
-        cout << "Worker " << comm->getWorkerId() << " is here" << endl;
+        cout << "Worker " << comm->getWorkerId() << " is at the first barrier." << endl;
 
         comm->barrier();
 
@@ -200,20 +224,20 @@ class KMeansWorker : public harp::Worker {
             delete[] closestCentroid;
         }
         record(TIME_PARALLEL_TOTAL_END);
-        std::cout << "Parallel : " << diff(TIME_PARALLEL_TOTAL_START, TIME_PARALLEL_TOTAL_END) << std::endl;
+        std::cout << "Parallel Calculation time: " << diff(TIME_PARALLEL_TOTAL_START, TIME_PARALLEL_TOTAL_END) << std::endl;
         if (workerId == 0) {
-            std::cout << "Speedup : " << diff(TIME_BEFORE_SERIAL, TIME_AFTER_SERIAL) /
+            std::cout << "Speedup: " << diff(TIME_BEFORE_SERIAL, TIME_AFTER_SERIAL) /
                                          diff(TIME_PARALLEL_TOTAL_START, TIME_PARALLEL_TOTAL_END) << std::endl;
 
-            std::cout << "Avg async rotation time : " << average(TIME_ASYNC_ROTATE_BEGIN, TIME_ASYNC_ROTATE_END)
+            std::cout << "Avg async rotation time: " << average(TIME_ASYNC_ROTATE_BEGIN, TIME_ASYNC_ROTATE_END)
                       << std::endl;
-            std::cout << "Avg Wait time : " << average(TIME_BEFORE_WAIT, TIME_AFTER_WAIT) << std::endl;
+            std::cout << "Avg Wait time: " << average(TIME_BEFORE_WAIT, TIME_AFTER_WAIT) << std::endl;
             std::cout << "Total Communication time : " << total(11, 12) << std::endl;
             std::cout << "Total Computation time : " << diff(TIME_PARALLEL_TOTAL_START, TIME_PARALLEL_TOTAL_END) -
                                                         total(TIME_ASYNC_ROTATE_BEGIN, TIME_ASYNC_ROTATE_END) -
                                                         diff(TIME_BEFORE_WAIT, TIME_AFTER_WAIT) << std::endl;
 
-            util::print::printTable(myCentroids);
+//            util::print::printTable(myCentroids);
             //printPartition(centroids->getPartition(0));
         }
 

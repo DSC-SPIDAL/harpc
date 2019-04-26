@@ -58,7 +58,9 @@ class MyWorker : public harp::Worker {
     }
 };
 
+
 int main() {
+
     MyWorker worker;
     worker.init(0, nullptr);
     worker.start();
