@@ -3,7 +3,7 @@
 
 #include "../communication/Communicator.h"
 
-namespace harp {
+namespace harp::worker {
 
     class Worker {
     protected:

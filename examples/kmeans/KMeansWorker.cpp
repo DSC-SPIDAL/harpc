@@ -19,7 +19,6 @@
 namespace fs = boost::filesystem;
 
 using namespace harp;
-using namespace harp::ds::util;
 using namespace harp::util::timing;
 using namespace std::chrono;
 using namespace std;
@@ -42,7 +41,7 @@ const int TIME_PARALLEL_TOTAL_END = tagCounter++;
 const int TIME_ASYNC_ROTATE_BEGIN = tagCounter++;
 const int TIME_ASYNC_ROTATE_END = tagCounter++;
 
-class KMeansWorker : public harp::Worker {
+class KMeansWorker : public harp::worker::Worker {
 
     void execute(com::Communicator *comm, int argc, char *argv[]) {
 
@@ -106,8 +105,8 @@ class KMeansWorker : public harp::Worker {
 //            util::print::printTable(centroids);
 //            util::print::printPartition(centroids->getPartition(0));
 
-            deleteTable(points, true);
-            deleteTable(centroids, true);
+            ds::util::deleteTable(points, true);
+            ds::util::deleteTable(centroids, true);
         }
 
         cout << "Worker " << comm->getWorkerId() << " is at the first barrier." << endl;
@@ -250,8 +249,8 @@ class KMeansWorker : public harp::Worker {
         //printTable(myCentroids);
         //printPartition(centroids->getPartition(0));
 
-        deleteTable(myCentroids, true);
-        deleteTable(points, true);
+        ds::util::deleteTable(myCentroids, true);
+        ds::util::deleteTable(points, true);
     }
 };
 
