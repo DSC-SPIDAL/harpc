@@ -40,7 +40,7 @@ add_subdirectory(kernels)
 add_subdirectory(util)
 add_subdirectory(worker)
 
-add_executable(harpc examples/kmeans/kmeans.cpp
+add_executable(harpc examples/kmeans/KMeansWorker.cpp
         examples/generators/DataGenerator.cpp
         examples/generators/DataGenerator.h
         )

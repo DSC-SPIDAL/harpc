@@ -18,7 +18,6 @@ namespace harp {
         private:
             std::map<int, Partition<TYPE> *> partitionMap;
 
-
             unsigned long iteratingIndex = 0;
 
             //this holds partitions received from asynchronous communication
@@ -59,9 +58,16 @@ namespace harp {
                 return this->partitionMap.size();
             }
 
+            void printTableSummary() {
+                std::cout << "Table summary: " << std::endl;
+                for(const auto& kv : partitionMap) {
+                    std::cout << "pid: " << kv.first << ", psize: " << kv.second->getSize() << std::endl;
+                }
+            }
+
             //const std::unordered_set<int> *getPartitionKeySet(bool blockForAvailability = false);
 
-            std::map<int, Partition<TYPE> *> *getPartitions(bool blockForAvailability = false) {
+            std::map<int, Partition<TYPE> *> * getPartitions(bool blockForAvailability = false) {
                 this->pushPendingPartitions();
                 if (blockForAvailability) {
                     while (this->partitionMap.empty()) {

@@ -19,7 +19,8 @@
 namespace harp {
     namespace kernels {
         template<class TYPE>
-        void kmeans(harp::ds::Table<TYPE> *centroids, harp::ds::Table<TYPE> *points, int vectorSize, int iterations);
+        void calculateKMeans(harp::ds::Table<TYPE> *centroids, harp::ds::Table<TYPE> *points, int vectorSize,
+                             int iterations);
     }
 }
 #endif //HARPC_KMEANS_H

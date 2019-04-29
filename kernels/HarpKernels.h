@@ -15,8 +15,8 @@
 #ifndef HARPC_HARPKERNELS_H
 #define HARPC_HARPKERNELS_H
 
-#include "kmeans/KMeans.h"
-#include "kmeans/KMeans.cpp"
+#include "kmeans/KMeansCalculator.h"
+#include "kmeans/KMeansCalculator.cpp"
 
 #include "math/HarpMath.h"
 

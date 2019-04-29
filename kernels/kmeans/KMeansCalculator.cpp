@@ -11,22 +11,26 @@
 //  limitations under the License.
 //
 
-
 #include <iostream>
 #include "../../data_structures/DataStructures.h"
 #include "../math/HarpMath.h"
 #include "float.h"
 
 using namespace std;
+using namespace harp;
 
 namespace harp {
     namespace kernels {
         template<class TYPE>
-        void kmeans(harp::ds::Table<TYPE> *centroids, harp::ds::Table<TYPE> *points, int vectorSize, int iterations) {
+        void calculateKMeans(ds::Table<TYPE> *centroids,
+                ds::Table<TYPE> *points,
+                int vectorSize,
+                int iterations) {
+
             int numOfCentroids = static_cast<int>(centroids->getPartitionCount());
-            auto *clusters = new harp::ds::Table<TYPE> *[numOfCentroids];
+            auto *clusters = new ds::Table<TYPE> *[numOfCentroids];
             for (int i = 0; i < numOfCentroids; i++) {
-                clusters[i] = new harp::ds::Table<TYPE>(i);
+                clusters[i] = new ds::Table<TYPE>(i);
             }
 
 
@@ -36,7 +40,7 @@ namespace harp {
                     auto minDistance = DBL_MAX;
                     int currentCentroidIndex = 0;
                     for (auto c :*centroids->getPartitions()) {
-                        double distance = harp::math::partition::distance(p.second, c.second);
+                        double distance = math::partition::distance(p.second, c.second);
                         if (distance < minDistance) {
                             minDistance = distance;
                             minCentroidIndex = currentCentroidIndex;
@@ -49,7 +53,7 @@ namespace harp {
 
                 //new centroids
                 for (int c = 0; c < numOfCentroids; c++) {
-                    auto *newC = harp::math::table::mean(clusters[c], vectorSize);
+                    auto *newC = math::table::mean(clusters[c], vectorSize);
                     centroids->addPartition(newC);
                 }
 
@@ -57,7 +61,7 @@ namespace harp {
                     clusters[j]->clear();
                 }
             }
-            harp::ds::util::deleteTables(clusters, false, static_cast<int>(centroids->getPartitionCount()));
+            ds::util::deleteTables(clusters, false, static_cast<int>(centroids->getPartitionCount()));
         }
     }
 }
