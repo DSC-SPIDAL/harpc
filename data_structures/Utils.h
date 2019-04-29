@@ -17,41 +17,37 @@
 
 #include "Table.h"
 
-namespace harp {
-    namespace ds {
-        namespace util {
-            template<class TYPE>
-            void deleteTable(harp::ds::Table<TYPE> *table, bool clearPartitions){
-                if (table != nullptr) {
-                    table->clear(clearPartitions);
-                }
-                delete table;
-            }
-
-            template<class TYPE>
-            void deleteTables(harp::ds::Table<TYPE> **tables, bool clearPartitions, int arrSize){
-                for (int i = 0; i < arrSize; i++) {
-                    deleteTable(tables[i], clearPartitions);
-                }
-                delete[] tables;
-            }
-
-            template<class TYPE>
-            void resetPartition(harp::ds::Partition<TYPE> *partition, TYPE value) {
-                auto *data = partition->getData();
-                for (int i = 0; i < partition->getSize(); i++) {
-                    data[i] = value;
-                }
-            }
-
-            template<class TYPE>
-            void resetTable(harp::ds::Table<TYPE> *table, TYPE value) {
-                for (auto p:*table->getPartitions()) {
-                    resetPartition<TYPE>(p.second, value);
-                }
-                table->resetIterator();
-            }
+namespace harp::ds::util {
+    template<class TYPE>
+    void deleteTable(harp::ds::Table<TYPE> *table, bool clearPartitions) {
+        if (table != nullptr) {
+            table->clear(clearPartitions);
         }
+        delete table;
+    }
+
+    template<class TYPE>
+    void deleteTables(harp::ds::Table<TYPE> **tables, bool clearPartitions, int arrSize) {
+        for (int i = 0; i < arrSize; i++) {
+            deleteTable(tables[i], clearPartitions);
+        }
+        delete[] tables;
+    }
+
+    template<class TYPE>
+    void resetPartition(harp::ds::Partition<TYPE> *partition, TYPE value) {
+        auto *data = partition->getData();
+        for (int i = 0; i < partition->getSize(); i++) {
+            data[i] = value;
+        }
+    }
+
+    template<class TYPE>
+    void resetTable(harp::ds::Table<TYPE> *table, TYPE value) {
+        for (auto p:*table->getPartitions()) {
+            resetPartition<TYPE>(p.second, value);
+        }
+        table->resetIterator();
     }
 }
 #endif //HARPC_UTILS_H

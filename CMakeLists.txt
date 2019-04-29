@@ -5,7 +5,8 @@ cmake_minimum_required(VERSION 3.12)
 
 project(harpc)
 
-set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_CXX_STANDARD 17)
+#set(CMAKE_CXX_STANDARD 14)
 
 list(APPEND CMAKE_CXX_FLAGS "-pthread -std=c++11 ${CMAKE_CXX_FLAGS}")
 

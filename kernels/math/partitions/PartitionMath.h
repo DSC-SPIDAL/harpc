@@ -16,16 +16,12 @@
 
 #include "../../../data_structures/Partition.h"
 
-namespace harp {
-    namespace math {
-        namespace partition {
-            template<class TYPE>
-            double distance(harp::ds::Partition<TYPE> *p1, harp::ds::Partition<TYPE> *p2);
+namespace harp::math::partition {
+    template<class TYPE>
+    double distance(harp::ds::Partition<TYPE> *p1, harp::ds::Partition<TYPE> *p2);
 
-            template<class TYPE>
-            double distance(harp::ds::Partition<TYPE> *p1, int i1Start, int i1End,
-                            harp::ds::Partition<TYPE> *p2, int i2Start, int i2End);
-        }
-    }
+    template<class TYPE>
+    double distance(harp::ds::Partition<TYPE> *p1, int i1Start, int i1End,
+                    harp::ds::Partition<TYPE> *p2, int i2Start, int i2End);
 }
 #endif //HARPC_PARTITIONMATH_H

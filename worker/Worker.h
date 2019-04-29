@@ -4,6 +4,7 @@
 #include "../communication/Communicator.h"
 
 namespace harp {
+
     class Worker {
     protected:
         int workerId;

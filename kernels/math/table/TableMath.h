@@ -18,15 +18,11 @@
 #include "../../../data_structures/Partition.h"
 #include "../../../data_structures/Table.h"
 
-namespace harp {
-    namespace math {
-        namespace table {
-            template<class TYPE>
-            harp::ds::Partition<TYPE> *mean(harp::ds::Table<TYPE> *table, int partitionSize);
+namespace harp::math::table {
+    template<class TYPE>
+    harp::ds::Partition<TYPE> *mean(harp::ds::Table<TYPE> *table, int partitionSize);
 
-            template<class TYPE>
-            harp::ds::Partition<TYPE> *sum(harp::ds::Table<TYPE> *table, int partitionSize);
-        }
-    }
+    template<class TYPE>
+    harp::ds::Partition<TYPE> *sum(harp::ds::Table<TYPE> *table, int partitionSize);
 }
 #endif //HARPC_TABLEMATH_H

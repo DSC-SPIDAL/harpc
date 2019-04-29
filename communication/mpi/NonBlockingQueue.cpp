@@ -16,10 +16,9 @@
 #include "NonBlockingQueue.h"
 
 
-namespace harp {
-    namespace comm {
-        void NonBlockingQueue::push(std::function<void> &&func) {
+namespace harp::comm {
 
-        }
+    void NonBlockingQueue::push(std::function<void> &&func) {
+
     }
 }

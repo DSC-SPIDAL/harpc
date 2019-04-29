@@ -15,50 +15,46 @@
 #include "TableMath.h"
 #include "iostream"
 
-namespace harp {
-    namespace math {
-        namespace table {
-            /**
-             * Calaculates the sum of all partitions. Output partition id will be the id of the table
-             *
-             * @tparam TYPE
-             * @param table
-             * @param partitionSize
-             * @return
-             */
-            template<class TYPE>
-            harp::ds::Partition<TYPE> *
-            sum(harp::ds::Table<TYPE> *table, int partitionSize) {
-                auto *sum = new TYPE[partitionSize];
-                for (int i = 0; i < partitionSize; i++) {
-                    sum[i] = 0;
-                }
-                for (auto p: *table->getPartitions()) {
-                    auto *data = p.second->getData();
-                    for (int i = 0; i < partitionSize; i++) {
-                        sum[i] += data[i];
-                    }
-                }
-                return new harp::ds::Partition<TYPE>(table->getId(), sum, partitionSize);
-            }
-
-            /**
-             * Calculates the mean of all partitions. Output partition id will be the id of the table
-             *
-             * @tparam TYPE
-             * @param table
-             * @param partitionSize
-             * @return
-             */
-            template<class TYPE>
-            harp::ds::Partition<TYPE> *
-            mean(harp::ds::Table<TYPE> *table, int partitionSize) {//todo remove partition size
-                auto *p = sum(table, partitionSize);
-                for (int i = 0; i < p->getSize(); i++) {
-                    p->getData()[i] /= table->getPartitionCount();
-                }
-                return p;
+namespace harp::math::table {
+    /**
+     * Calaculates the sum of all partitions. Output partition id will be the id of the table
+     *
+     * @tparam TYPE
+     * @param table
+     * @param partitionSize
+     * @return
+     */
+    template<class TYPE>
+    harp::ds::Partition<TYPE> *
+    sum(harp::ds::Table<TYPE> *table, int partitionSize) {
+        auto *sum = new TYPE[partitionSize];
+        for (int i = 0; i < partitionSize; i++) {
+            sum[i] = 0;
+        }
+        for (auto p: *table->getPartitions()) {
+            auto *data = p.second->getData();
+            for (int i = 0; i < partitionSize; i++) {
+                sum[i] += data[i];
             }
         }
+        return new harp::ds::Partition<TYPE>(table->getId(), sum, partitionSize);
+    }
+
+    /**
+     * Calculates the mean of all partitions. Output partition id will be the id of the table
+     *
+     * @tparam TYPE
+     * @param table
+     * @param partitionSize
+     * @return
+     */
+    template<class TYPE>
+    harp::ds::Partition<TYPE> *
+    mean(harp::ds::Table<TYPE> *table, int partitionSize) {//todo remove partition size
+        auto *p = sum(table, partitionSize);
+        for (int i = 0; i < p->getSize(); i++) {
+            p->getData()[i] /= table->getPartitionCount();
+        }
+        return p;
     }
 }

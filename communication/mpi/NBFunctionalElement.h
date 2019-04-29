@@ -19,15 +19,14 @@
 #include <vector>
 #include <functional>
 
-namespace harp {
-    namespace comm {
-        class NBFunctionalElement {
-        private:
-            std::vector<MPI_Request> requets;
-            std::function<void()> nextFunction;
-        public:
-            bool checkAndExecute();
-        };
-    }
+namespace harp::comm {
+
+    class NBFunctionalElement {
+    private:
+        std::vector<MPI_Request> requets;
+        std::function<void()> nextFunction;
+    public:
+        bool checkAndExecute();
+    };
 }
 #endif //HARPC_NBFUNCTIONALELEMENT_H

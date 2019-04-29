@@ -20,81 +20,78 @@
 #include "DataGenerator.h"
 #include "../../data_structures/DataStructures.h"
 
-namespace harp {
-    namespace util {
-        void generateKMeansData(std::string folder, int numberOfRecords, int vectorSize,
-                                int splits, int centroidsCount) {
-            srand(time(NULL));
-            std::vector<std::thread> threads;
-            for (int i = 0; i < splits; i++) {
-                std::thread t([folder, numberOfRecords, vectorSize, splits, i]() {
-                    std::ofstream ostream;
-                    ostream.open(folder + "/" + std::to_string(i));
-                    for (int r = 0; r < numberOfRecords / splits; r++) {
-                        for (int v = 0; v < vectorSize; v++) {
-                            ostream << static_cast <float> (rand()) / (static_cast <float> (RAND_MAX / 150));
-                            if (v != vectorSize - 1) {
-                                ostream << ",";
-                            } else {
-                                ostream << std::endl;
-                            }
+namespace harp::util {
+    void generateKMeansData(std::string folder, int numberOfRecords, int vectorSize, int splits, int centroidsCount) {
+        srand(time(NULL));
+        std::vector<std::thread> threads;
+        for (int i = 0; i < splits; i++) {
+            std::thread t([folder, numberOfRecords, vectorSize, splits, i]() {
+                std::ofstream ostream;
+                ostream.open(folder + "/" + std::to_string(i));
+                for (int r = 0; r < numberOfRecords / splits; r++) {
+                    for (int v = 0; v < vectorSize; v++) {
+                        ostream << static_cast <float> (rand()) / (static_cast <float> (RAND_MAX / 150));
+                        if (v != vectorSize - 1) {
+                            ostream << ",";
+                        } else {
+                            ostream << std::endl;
                         }
                     }
-                    ostream.close();
-                });
-
-                threads.push_back(std::move(t));
-            }
-
-            std::ofstream ostream;
-            ostream.open(folder + "/centroids");
-            for (int i = 0; i < centroidsCount; i++) {
-                for (int v = 0; v < vectorSize; v++) {
-                    ostream << static_cast <float> (rand()) / (static_cast <float> (RAND_MAX / 150));
-                    if (v != vectorSize - 1) {
-                        ostream << ",";
-                    } else {
-                        ostream << std::endl;
-                    }
                 }
-            }
-            ostream.close();
+                ostream.close();
+            });
 
-            for (auto &t:threads) {
-                t.join();
-            }
-            threads.clear();
+            threads.push_back(std::move(t));
         }
 
-
-        void readKMeansDataFromFile(std::string file, int vectorSize,
-                                    harp::ds::Table<double> *table, int partitionIdPivot) {
-            std::ifstream istream(file);
-            int partitionIndex = 0;
-            while (istream.good()) {
-                auto *vector = new double[vectorSize];
-                bool added = false;
-                for (int i = 0; i < vectorSize; i++) {
-                    std::string str;
-                    if (i < vectorSize - 1) {
-                        getline(istream, str, ',');
-                    } else {
-                        getline(istream, str);
-                    }
-                    if (!str.empty()) {
-                        vector[i] = std::stod(str);
-                        added = true;
-                    }
-                }
-                if (added) {
-                    auto *part = new harp::ds::Partition<double>(partitionIdPivot + partitionIndex++, vector,
-                                                                 vectorSize);
-                    table->addPartition(part);
+        std::ofstream ostream;
+        ostream.open(folder + "/centroids");
+        for (int i = 0; i < centroidsCount; i++) {
+            for (int v = 0; v < vectorSize; v++) {
+                ostream << static_cast <float> (rand()) / (static_cast <float> (RAND_MAX / 150));
+                if (v != vectorSize - 1) {
+                    ostream << ",";
                 } else {
-                    delete[] vector;
+                    ostream << std::endl;
                 }
             }
-            istream.close();
         }
+        ostream.close();
+
+        for (auto &t:threads) {
+            t.join();
+        }
+        threads.clear();
+    }
+
+
+    void readKMeansDataFromFile(std::string file, int vectorSize,
+                                harp::ds::Table<double> *table, int partitionIdPivot) {
+        std::ifstream istream(file);
+        int partitionIndex = 0;
+        while (istream.good()) {
+            auto *vector = new double[vectorSize];
+            bool added = false;
+            for (int i = 0; i < vectorSize; i++) {
+                std::string str;
+                if (i < vectorSize - 1) {
+                    getline(istream, str, ',');
+                } else {
+                    getline(istream, str);
+                }
+                if (!str.empty()) {
+                    vector[i] = std::stod(str);
+                    added = true;
+                }
+            }
+            if (added) {
+                auto *part = new harp::ds::Partition<double>(partitionIdPivot + partitionIndex++, vector,
+                                                             vectorSize);
+                table->addPartition(part);
+            } else {
+                delete[] vector;
+            }
+        }
+        istream.close();
     }
 }

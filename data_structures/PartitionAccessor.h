@@ -19,23 +19,21 @@
 #include "Partition.h"
 #include "mutex"
 
-namespace harp {
-    namespace ds {
-        template<class TYPE>
-        class PartitionAccessor {
-        private:
-            std::map<int, Partition<TYPE> *> *partitionMap;
-            std::mutex *mutex;
-        public:
-            PartitionAccessor(std::map<int, Partition<TYPE> *> *partitionMap, std::mutex *mutex) {
-                this->partitionMap = partitionMap;
-                this->mutex = mutex;
-            }
+namespace harp::ds {
+    template<class TYPE>
+    class PartitionAccessor {
+    private:
+        std::map<int, Partition<TYPE> *> *partitionMap;
+        std::mutex *mutex;
+    public:
+        PartitionAccessor(std::map<int, Partition<TYPE> *> *partitionMap, std::mutex *mutex) {
+            this->partitionMap = partitionMap;
+            this->mutex = mutex;
+        }
 
-            virtual bool hasNext() = 0;
+        virtual bool hasNext() = 0;
 
-            Partition<TYPE> *next();
-        };
-    }
+        Partition<TYPE> *next();
+    };
 }
 #endif //HARPC_PARTITIONACCESSOR_H

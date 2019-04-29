@@ -5,57 +5,56 @@
 #include <iostream>
 #include "DataTypes.h"
 
-namespace harp {
-    namespace ds {
-        template<class TYPE>
-        class Partition {
-        private:
-            int id;
-            TYPE *data;
-            int size = 0;
-        public:
+namespace harp::ds {
 
-            Partition(int id, TYPE *data, int size) {
-                this->id = id;
-                this->data = data;
-                this->size = size;
-            }
+    template<class TYPE>
+    class Partition {
+    private:
+        int id;
+        TYPE *data;
+        int size = 0;
+    public:
 
-            Partition(const Partition &p) {
-                std::cout << "Copy partition called" << std::endl;
-            }
+        Partition(int id, TYPE *data, int size) {
+            this->id = id;
+            this->data = data;
+            this->size = size;
+        }
 
-            ~Partition() {
-                this->clear();
-            }
+        Partition(const Partition &p) {
+            std::cout << "Copy partition called" << std::endl;
+        }
 
-            int getId() {
-                return this->id;
-            }
+        ~Partition() {
+            this->clear();
+        }
 
-            TYPE *getData() {
-                return this->data;
-            }
+        int getId() {
+            return this->id;
+        }
 
-            void setData(TYPE *data, int size) {
-                this->clear();
-                this->data = data;
-                this->size = size;
-            }
+        TYPE *getData() {
+            return this->data;
+        }
 
-            int getSize() {
-                return this->size;
-            }
+        void setData(TYPE *data, int size) {
+            this->clear();
+            this->data = data;
+            this->size = size;
+        }
 
-            void clear() {
-                delete[] data;
-            }
-        };
+        int getSize() {
+            return this->size;
+        }
 
-        enum PartitionState {
-            ADDED, ADD_FAILED, COMBINED, COMBINE_FAILED
-        };
-    }
+        void clear() {
+            delete[] data;
+        }
+    };
+
+    enum PartitionState {
+        ADDED, ADD_FAILED, COMBINED, COMBINE_FAILED
+    };
 }
 
 

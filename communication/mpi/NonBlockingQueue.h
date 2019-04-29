@@ -18,15 +18,14 @@
 #import "functional"
 #include "boost/lockfree/queue.hpp"
 
-namespace harp {
-    namespace comm {
-        class NonBlockingQueue {
-        private:
+namespace harp::comm {
 
-        public:
-            void push(std::function<void> &&func);
-        };
-    }
+    class NonBlockingQueue {
+    private:
+
+    public:
+        void push(std::function<void> &&func);
+    };
 }
 
 #endif //HARPC_NONBLOCKINGQUEUE_H
