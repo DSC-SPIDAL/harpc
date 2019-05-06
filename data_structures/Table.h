@@ -5,11 +5,12 @@
 #include "vector"
 #include <unordered_set>
 #include <queue>
-#include "Partition.h"
-#include "DataTypes.h"
+#include "mutex"
 #include "mpi.h"
 #include <condition_variable>
-#include "mutex"
+
+#include "Partition.h"
+#include "DataTypes.h"
 
 namespace harp::ds {
 

@@ -5,12 +5,12 @@ include_directories(${MPI_INCLUDE_PATH})
 
 add_library(
         harp_data_structures INTERFACE
-)
+        )
 
-target_link_libraries(
-        harp_data_structures INTERFACE
-        ${MPI_C_LIBRARIES}
-)
+#target_link_libraries(
+#        harp_data_structures INTERFACE
+#        ${MPI_C_LIBRARIES}
+#)
 
 FILE(GLOB PUBLIC_HEADERS *.h)
 
@@ -19,5 +19,6 @@ INSTALL(FILES ${PUBLIC_HEADERS}
 
 INSTALL(
         TARGETS harp_data_structures
+        ARCHIVE DESTINATION lib
         LIBRARY DESTINATION lib
 )

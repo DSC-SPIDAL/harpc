@@ -69,6 +69,7 @@ target_include_directories(
 
 target_link_libraries(
         harpc
+        harp_data_structures
         harp_worker
         ${MPI_C_LIBRARIES}
         ${Boost_LIBRARIES}

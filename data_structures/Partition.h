@@ -13,6 +13,7 @@ namespace harp::ds {
         int id;
         TYPE *data;
         int size = 0;
+
     public:
 
         Partition(int id, TYPE *data, int size) {

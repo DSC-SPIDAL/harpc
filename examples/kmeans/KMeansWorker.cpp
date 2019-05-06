@@ -1,27 +1,27 @@
 #include <iostream>
-#include "../../data_structures/DataStructures.h"
-#include "../../worker/Worker.h"
-#include <time.h>
-#include "../generators/DataGenerator.h"
-#include "../../kernels/HarpKernels.h"
 #include <fstream>
 #include <chrono>
 #include <iomanip>
 #include <thread>
+
+#include <time.h>
 #include "future"
 
-#include "timing.h"
-
-#include "print.h"
 #include <boost/filesystem/operations.hpp>
 #include <boost/filesystem/path.hpp>
 
-namespace fs = boost::filesystem;
+#include "../../data_structures/DataStructures.h"
+#include "../../worker/Worker.h"
+#include "../generators/DataGenerator.h"
+#include "../../kernels/HarpKernels.h"
+#include "../../util/timing.h"
+#include "../../util/print.h"
 
+using namespace std;
+using namespace std::chrono;
+namespace fs = boost::filesystem;
 using namespace harp;
 using namespace harp::util::timing;
-using namespace std::chrono;
-using namespace std;
 
 bool debugCondition(int workerId) {
     return workerId == 1;
@@ -41,7 +41,7 @@ const int TIME_PARALLEL_TOTAL_END = tagCounter++;
 const int TIME_ASYNC_ROTATE_BEGIN = tagCounter++;
 const int TIME_ASYNC_ROTATE_END = tagCounter++;
 
-class KMeansWorker : public harp::worker::Worker {
+class KMeansWorker : public worker::Worker {
 
     void execute(com::Communicator *comm, int argc, char *argv[]) {
 
@@ -83,7 +83,7 @@ class KMeansWorker : public harp::worker::Worker {
             cout << "data generated" << endl;
 
             //running non-distributed version in node 0
-            auto *points = new harp::ds::Table<double>(0);
+            auto *points = new ds::Table<double>(0);
             for (int i = 0; i < worldSize; i++) {
                 util::readKMeansDataFromFile(dirName + to_string(i), vectorSize, points,
                                              static_cast<int>(points->getPartitionCount()));
@@ -91,7 +91,7 @@ class KMeansWorker : public harp::worker::Worker {
 
             cout << "partition count: " << points->getPartitionCount() << endl;
 
-            auto *centroids = new harp::ds::Table<double>(1);
+            auto *centroids = new ds::Table<double>(1);
             util::readKMeansDataFromFile("/tmp/harp/kmeans/centroids", vectorSize, centroids);
 
 //            util::print::printTable(centroids);
@@ -117,7 +117,7 @@ class KMeansWorker : public harp::worker::Worker {
         //running distributed version
 
         //load centroids
-        auto *centroids = new harp::ds::Table<double>(1);
+        auto *centroids = new ds::Table<double>(1);
 
         //todo load only required centroids
         util::readKMeansDataFromFile(dirName + "/centroids", vectorSize, centroids);
