@@ -5,5 +5,6 @@
 #include "Table.h"
 #include "DataTypes.h"
 #include "Utils.h"
+#include "TableInfo.h"
 
 #endif //HARPC_INCULDES_H
