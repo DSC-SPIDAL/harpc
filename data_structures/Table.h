@@ -68,7 +68,7 @@ namespace harp::ds {
 
         //const std::unordered_set<int> *getPartitionKeySet(bool blockForAvailability = false);
 
-        std::map<int, Partition<TYPE> *> *getPartitions(bool blockForAvailability = false) {
+        std::map<int, Partition<TYPE> *> * getPartitions(bool blockForAvailability = false) {
             this->pushPendingPartitions();
             if (blockForAvailability) {
                 while (this->partitionMap.empty()) {

@@ -192,9 +192,15 @@ namespace harp::com {
             }
         }
 
+        /**
+         * broadcast a Table to all others
+         * @tparam TYPE
+         * @param table
+         * @param bcastWorkerId
+         */
         template<class TYPE>
         void broadcast(harp::ds::Table<TYPE> *table, int bcastWorkerId) {
-            //determining number of partitions to bcast
+            //determining number of partitions to broadcast
             int partitionCount;
             if (bcastWorkerId == this->workerId) {
                 partitionCount = static_cast<int>(table->getPartitionCount());
@@ -205,30 +211,29 @@ namespace harp::com {
             int partitionIds[partitionCount * 2];// [id, size]
             int index = 0;
             if (bcastWorkerId == this->workerId) {
-                for (const auto p : table->getPartitions()) {
+                for (const auto p : *table->getPartitions()) {
                     partitionIds[index++] = p.first;
                     partitionIds[index++] = p.second->getSize();
                 }
             }
             MPI_Bcast(&partitionIds, partitionCount * 2, MPI_INT, bcastWorkerId, MPI_COMM_WORLD);
 
-            MPI_Datatype dataType = getMPIDataType(table->getDataType());
+            MPI_Datatype dataType = getMPIDataType<TYPE>();
 
-            //now receiving partitions
+            //now broadcasting and receiving partitions
             for (long i = 0; i < partitionCount * 2; i += 2) {
                 int partitionId = partitionIds[i];
                 int partitionSize = partitionIds[i + 1];
                 if (partitionSize > 0) {
-                    auto *data = createArray(table->getDataType(),
-                                             partitionSize);
+                    TYPE *data;
                     if (bcastWorkerId == this->workerId) {
                         data = table->getPartition(partitionId)->getData();
+                    } else {
+                        data = new TYPE[partitionSize];
                     }
                     MPI_Bcast(data, partitionSize, dataType, bcastWorkerId, MPI_COMM_WORLD);
                     if (bcastWorkerId != this->workerId) {
-                        auto *newPartition = new harp::ds::Partition<TYPE>(partitionId, data,
-                                                                           partitionSize,
-                                                                           table->getDataType());
+                        auto *newPartition = new harp::ds::Partition<TYPE>(partitionId, data, partitionSize);
                         table->addPartition(newPartition);
                     }
                 }
@@ -387,5 +392,6 @@ namespace harp::com {
             }
         }
     };
-}
+
+} // end of namespace harp::com
 #endif //HARPC_COMMUNICATOR_H
