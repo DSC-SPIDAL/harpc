@@ -38,6 +38,7 @@ namespace harp::com {
             MPI_Barrier(MPI_COMM_WORLD);
         }
 
+
         template<class TYPE>
         void allGather(harp::ds::Table<TYPE> *table) {
             auto *partitionCounts = new int[worldSize];//no of partitions in each node
@@ -51,6 +52,7 @@ namespace harp::com {
                     MPI_INT,
                     MPI_COMM_WORLD
             );
+
 
             int totalPartitionsInWorld = 0;
             int *recvCounts = new int[worldSize];
@@ -194,7 +196,7 @@ namespace harp::com {
         }
 
         /**
-         * broadcast a Table to all others
+         * broadcast a Table to all others. broadcast each partition separately
          * broadcasting a table happens in three steps:
          *  broadcasting TableInfo size
          *  broadcasting TableInfo
@@ -207,10 +209,10 @@ namespace harp::com {
          * @param bcastWorkerId
          */
         template<class TYPE>
-        void broadcast(harp::ds::Table<TYPE> *table, int bcastWorkerId) {
+        void broadcastAsPartitions(harp::ds::Table<TYPE> *table, int bcastWorkerId) {
             // first we broadcast TableInfo size
             int tableInfoSize;
-            ds::TableInfo * tableInfo;
+            ds::TableInfo *tableInfo;
             if (bcastWorkerId == this->workerId) {
                 tableInfo = new ds::TableInfo(table);
                 tableInfoSize = tableInfo->getSerializedSize();
@@ -219,7 +221,7 @@ namespace harp::com {
             MPI_Bcast(&tableInfoSize, 1, MPI_INT, bcastWorkerId, MPI_COMM_WORLD);
 
             // second, we broadcast serialized TableInfo
-            int * serializedTableInfo;
+            int *serializedTableInfo;
             if (bcastWorkerId == this->workerId) {
                 serializedTableInfo = tableInfo->serialize();
             } else {
@@ -233,8 +235,8 @@ namespace harp::com {
 
             //third, we broadcast table partitions
             MPI_Datatype dataType = getMPIDataType<TYPE>();
-            int * partitionIds = tableInfo->getPartitionIDs();
-            int * partitionSizes = tableInfo->getPartitionSizes();
+            int *partitionIds = tableInfo->getPartitionIDs();
+            int *partitionSizes = tableInfo->getPartitionSizes();
 
             for (long i = 0; i < tableInfo->getNumberOfPartitions(); i++) {
                 if (partitionSizes[i] > 0) {
@@ -258,52 +260,60 @@ namespace harp::com {
         }
 
         /**
-         * this is identical to broadcast method
-         * it does not use TableInfo
+         * broadcast a Table to all others. broadcast all partitions as a single array
+         * broadcasting a table happens in three steps:
+         *  broadcasting TableInfo size
+         *  broadcasting TableInfo
+         *  broadcasting all partitions as a single array
+         *
          * @tparam TYPE
          * @param table
          * @param bcastWorkerId
          */
         template<class TYPE>
-        void broadcast2(harp::ds::Table<TYPE> *table, int bcastWorkerId) {
-            //determining number of partitions to broadcast
-            int partitionCount;
+        void broadcastAsOneArray(harp::ds::Table<TYPE> *table, int bcastWorkerId) {
+            // first we broadcast TableInfo size
+            int tableInfoSize;
+            ds::TableInfo *tableInfo;
             if (bcastWorkerId == this->workerId) {
-                partitionCount = static_cast<int>(table->getPartitionCount());
+                tableInfo = new ds::TableInfo(table);
+                tableInfoSize = tableInfo->getSerializedSize();
             }
-            MPI_Bcast(&partitionCount, 1, MPI_INT, bcastWorkerId, MPI_COMM_WORLD);
 
-            //broadcasting partition ids and sizes
-            int partitionIds[partitionCount * 2];// [id, size]
-            int index = 0;
+            MPI_Bcast(&tableInfoSize, 1, MPI_INT, bcastWorkerId, MPI_COMM_WORLD);
+
+            // second, we broadcast serialized TableInfo
+            int *serializedTableInfo;
             if (bcastWorkerId == this->workerId) {
-                for (const auto p : *table->getPartitions()) {
-                    partitionIds[index++] = p.first;
-                    partitionIds[index++] = p.second->getSize();
-                }
+                serializedTableInfo = tableInfo->serialize();
+            } else {
+                serializedTableInfo = new int[tableInfoSize];
             }
-            MPI_Bcast(&partitionIds, partitionCount * 2, MPI_INT, bcastWorkerId, MPI_COMM_WORLD);
 
+            MPI_Bcast(serializedTableInfo, tableInfoSize, MPI_INT, bcastWorkerId, MPI_COMM_WORLD);
+            if (bcastWorkerId != this->workerId) {
+                tableInfo = ds::TableInfo::deserialize(serializedTableInfo);
+            }
+
+            //third, we broadcast table as an array
             MPI_Datatype dataType = getMPIDataType<TYPE>();
 
-            //now broadcasting and receiving partitions
-            for (long i = 0; i < partitionCount * 2; i += 2) {
-                int partitionId = partitionIds[i];
-                int partitionSize = partitionIds[i + 1];
-                if (partitionSize > 0) {
-                    TYPE *data;
-                    if (bcastWorkerId == this->workerId) {
-                        data = table->getPartition(partitionId)->getData();
-                    } else {
-                        data = new TYPE[partitionSize];
-                    }
-                    MPI_Bcast(data, partitionSize, dataType, bcastWorkerId, MPI_COMM_WORLD);
-                    if (bcastWorkerId != this->workerId) {
-                        auto *newPartition = new harp::ds::Partition<TYPE>(partitionId, data, partitionSize);
-                        table->addPartition(newPartition);
-                    }
-                }
+            TYPE * serializedTableData;
+            if (bcastWorkerId == this->workerId) {
+                serializedTableData = table->serialize();
+            } else {
+                serializedTableData = new TYPE[tableInfo->getSerializedTableSize()];
             }
+            MPI_Bcast(serializedTableData, tableInfo->getSerializedTableSize(), dataType, bcastWorkerId, MPI_COMM_WORLD);
+            if (bcastWorkerId != this->workerId) {
+                auto * newTable = ds::TableInfo::deserializeTable(serializedTableData, tableInfo);
+                table->swap(newTable);
+            }
+
+            // delete intermediate data
+            delete tableInfo;
+            delete[] serializedTableInfo;
+            delete[] serializedTableData;
         }
 
         template<class TYPE>

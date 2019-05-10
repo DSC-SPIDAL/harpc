@@ -2,6 +2,7 @@
 #define HARPC_TABLE_H
 
 #include <map>
+#include <algorithm>
 #include "vector"
 #include <unordered_set>
 #include <queue>
@@ -159,6 +160,36 @@ namespace harp::ds {
             this->pendingPartitions.push(partition);
             //this->pendingPartitionsMutex.unlock();
         }
+
+        /**
+         * calculate the size of the serialized table as array
+         * it is the sum of all partition sizes
+         * @return
+         */
+        int getSerializedSize() {
+            int size = 0;
+            for (const auto &kv : partitionMap) {
+                size += kv.second->getSize();
+            }
+            return size;
+        }
+
+        /**
+         * put all partition arrays into a single array, one after another, as returned by the iterator
+         * @return
+         */
+        TYPE * serialize() {
+            TYPE * data = new TYPE[getSerializedSize()];
+            int dataIndex = 0;
+            for (const auto &kv : partitionMap) {
+                TYPE * partitionData = kv.second->getData();
+                int len = kv.second->getSize();
+                std::copy(partitionData, partitionData + len, data + dataIndex);
+                dataIndex += len;
+            }
+            return data;
+        }
+
     };
 }
 

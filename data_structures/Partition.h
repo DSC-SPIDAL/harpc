@@ -34,7 +34,7 @@ namespace harp::ds {
             return this->id;
         }
 
-        TYPE *getData() {
+        TYPE * getData() {
             return this->data;
         }
 

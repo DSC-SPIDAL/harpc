@@ -35,20 +35,22 @@ void printTable(int worker, Table<TYPE> *tab) {
  * @param maxValue
  * @return
  */
-Table<int> * createTableInt(int tableId, int maxPartitions, int maxPartitionSize, int maxValue) {
-    auto *tab = new Table<int>(tableId);
+template<class TYPE>
+Table<TYPE> * createTable(int tableId, int maxPartitions, int maxPartitionSize, int maxValue, int workerId=0) {
+    auto *tab = new Table<TYPE>(tableId);
 
-    srand(time(NULL));
-    int numOfPartitions = rand() % maxPartitions;
+    srand(workerId + time(NULL));
+    int numOfPartitions = 2;
+//    int numOfPartitions = rand() % maxPartitions + 1;
     cout << "number of partitions: " << numOfPartitions << endl;
 
     for (int p = 0; p < numOfPartitions; p++) {
-        int partitionSize = rand() % maxPartitionSize;
-        int *data = new int[partitionSize];
+        int partitionSize = rand() % maxPartitionSize + 1;
+        TYPE *data = new TYPE[partitionSize];
         for (int j = 0; j < partitionSize; j++) {
             data[j] = rand() % maxValue;
         }
-        auto *partition = new Partition<int>(p, data, partitionSize);
+        auto *partition = new Partition<TYPE>(p, data, partitionSize);
         tab->addPartition(partition);
     }
 
@@ -59,6 +61,8 @@ class MyWorker : public harp::worker::Worker {
 
     void execute(Communicator *comm, int argc = 0, char *argv[] = NULL) override {
 
+//        testAllReduce(comm);
+//        testAllGather(comm);
         testBroadcast(comm);
     }
 
@@ -102,7 +106,7 @@ class MyWorker : public harp::worker::Worker {
         // populate the table for the first worker
         // this table will be broadcasted to all
         if (this->workerId == 0) {
-            tab = createTableInt(0, 10, 100, 1000);
+            tab = createTable<int>(0, 10, 100, 1000);
             cout <<  "original table: " << endl;
             printTable(workerId, tab);
 
@@ -112,19 +116,51 @@ class MyWorker : public harp::worker::Worker {
         }
 
         // broadcast from 0 to all
-        comm->broadcast(tab, 0);
+        comm->broadcastAsOneArray(tab, 0);
+//        comm->broadcastAsPartitions(tab, 0);
 
         printTable(workerId, tab);
 
         tab->clear();
     }
 
+    void testAllGather(Communicator *comm) {
+
+        Table<int> * tab;
+        tab = createTable<int>(0, 3, 10, 1000, workerId);
+        printTable(workerId, tab);
+
+        // broadcast from 0 to all
+        comm->allGather(tab);
+
+        cout << "table after allGather" << endl;
+        printTable(workerId, tab);
+
+        tab->clear();
+    }
+
+    void testAllReduce(Communicator *comm) {
+
+        Table<int> * tab;
+        tab = createTable<int>(0, 3, 10, 1000);
+        printTable(workerId, tab);
+
+        // broadcast from 0 to all
+        comm->allReduce(tab, MPI_SUM);
+
+        cout << "table after allGather" << endl;
+        printTable(workerId, tab);
+
+        tab->clear();
+    }
+
+
 };
 
 
 void testTableInfo() {
 
-    auto * table = createTableInt(0, 10, 100, 1000);
+    auto * table = createTable<int>(1, 10, 100, 1000);
     cout <<  "original table: " << endl;
     printTable(0, table);
 
@@ -144,7 +180,7 @@ void testTableInfo() {
     }
 
     TableInfo * tableInfo2 = TableInfo::deserialize(sdata);
-    cout << "number of partitions: " << tableInfo2->getNumberOfPartitions() << endl;
+    cout << "deserialized number of partitions: " << tableInfo2->getNumberOfPartitions() << endl;
     ids = tableInfo2->getPartitionIDs();
     sizes = tableInfo2->getPartitionSizes();
     for (int i = 0; i < tableInfo2->getNumberOfPartitions(); ++i) {
@@ -152,10 +188,32 @@ void testTableInfo() {
     }
 }
 
+void testTableSerialization() {
+
+    auto * table = createTable<int>(0, 10, 100, 1000);
+    cout <<  "original table: " << endl;
+    printTable(0, table);
+
+    auto * serializedTable = table->serialize();
+    int serializedSize = table->getSerializedSize();
+
+    cout << "st: ";
+    for (int k = 0; k < serializedSize; ++k) {
+        cout << serializedTable[k] << ",";
+    }
+    cout << endl;
+
+    TableInfo * tableInfo = new TableInfo(table);
+    auto * table2 = TableInfo::deserializeTable(serializedTable, tableInfo);
+    cout <<  "deserialized table: " << endl;
+    printTable(0, table);
+}
+
 int main() {
 
-    cout << "starting ..." << endl;
+//    cout << "starting ..." << endl;
 //    testTableInfo();
+//    testTableSerialization();
 
     MyWorker worker;
     worker.init(0, nullptr);
