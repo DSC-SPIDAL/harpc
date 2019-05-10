@@ -167,8 +167,42 @@ namespace harp::com {
             harp::ds::util::deleteTable(recvTab, false);
         }
 
+        /**
+         * perform allreduce on a table as a single array
+         * @tparam TYPE
+         * @param table
+         * @param operation
+         */
         template<class TYPE>
-        void allReduce(harp::ds::Table<TYPE> *table, MPI_Op operation) {
+        void allReduceAsOneArray(harp::ds::Table<TYPE> *table, MPI_Op operation) {
+            MPI_Datatype dataType = getMPIDataType<TYPE>();
+            auto *serializedData = table->serialize();
+            auto *reducedData = new TYPE[table->getSerializedSize()];
+
+            MPI_Allreduce(
+                    serializedData,
+                    reducedData,
+                    table->getSerializedSize(),
+                    dataType,
+                    operation,
+                    MPI_COMM_WORLD
+            );
+
+            auto * tableInfo = new ds::TableInfo(table);
+            auto * reducedTable = ds::TableInfo::deserializeTable(reducedData, tableInfo);
+            table->swap(reducedTable);
+
+            delete tableInfo;
+        }
+
+        /**
+         * perform allreduce each partition separately
+         * @tparam TYPE
+         * @param table
+         * @param operation
+         */
+        template<class TYPE>
+        void allReduceAsPartitions(harp::ds::Table<TYPE> *table, MPI_Op operation) {
             MPI_Datatype dataType = getMPIDataType<TYPE>();
             MPI_Request requests[table->getPartitionCount()];
             std::vector<TYPE *> dataArrays;
@@ -298,15 +332,16 @@ namespace harp::com {
             //third, we broadcast table as an array
             MPI_Datatype dataType = getMPIDataType<TYPE>();
 
-            TYPE * serializedTableData;
+            TYPE *serializedTableData;
             if (bcastWorkerId == this->workerId) {
                 serializedTableData = table->serialize();
             } else {
                 serializedTableData = new TYPE[tableInfo->getSerializedTableSize()];
             }
-            MPI_Bcast(serializedTableData, tableInfo->getSerializedTableSize(), dataType, bcastWorkerId, MPI_COMM_WORLD);
+            MPI_Bcast(serializedTableData, tableInfo->getSerializedTableSize(), dataType, bcastWorkerId,
+                      MPI_COMM_WORLD);
             if (bcastWorkerId != this->workerId) {
-                auto * newTable = ds::TableInfo::deserializeTable(serializedTableData, tableInfo);
+                auto *newTable = ds::TableInfo::deserializeTable(serializedTableData, tableInfo);
                 table->swap(newTable);
             }
 

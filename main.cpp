@@ -62,8 +62,8 @@ class MyWorker : public harp::worker::Worker {
     void execute(Communicator *comm, int argc = 0, char *argv[] = NULL) override {
 
 //        testAllReduce(comm);
-//        testAllGather(comm);
-        testBroadcast(comm);
+        testAllReduce(comm);
+//        testBroadcast(comm);
     }
 
     void testRotate(Communicator *comm) {
@@ -146,9 +146,10 @@ class MyWorker : public harp::worker::Worker {
         printTable(workerId, tab);
 
         // broadcast from 0 to all
-        comm->allReduce(tab, MPI_SUM);
+        comm->allReduceAsPartitions(tab, MPI_SUM);
+//        comm->allReduceAsOneArray(tab, MPI_SUM);
 
-        cout << "table after allGather" << endl;
+        cout << "table after allReduce" << endl;
         printTable(workerId, tab);
 
         tab->clear();

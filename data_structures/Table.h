@@ -150,6 +150,7 @@ namespace harp::ds {
         }
 
         void swap(Table<TYPE> *table) {
+            clear(true);
             this->partitionMap = table->partitionMap;
             this->orderedPartitions = table->orderedPartitions;
             this->iteratingIndex = 0;
