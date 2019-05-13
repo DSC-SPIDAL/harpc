@@ -40,8 +40,8 @@ Table<TYPE> * createTable(int tableId, int maxPartitions, int maxPartitionSize, 
     auto *tab = new Table<TYPE>(tableId);
 
     srand(workerId + time(NULL));
-//    int numOfPartitions = 0;
-    int numOfPartitions = rand() % maxPartitions;
+    int numOfPartitions = 3;
+//    int numOfPartitions = rand() % maxPartitions;
     cout << "number of partitions: " << numOfPartitions << endl;
 
     for (int p = 0; p < numOfPartitions; p++) {
@@ -130,9 +130,17 @@ class MyWorker : public harp::worker::Worker {
         printTable(workerId, tab);
 
         // broadcast from 0 to all
-        comm->allGatherAsOneArray(tab);
+//        comm->allGatherAsOneArray(tab);
+        auto tables = comm->allGatherAsPartitions(tab);
 
-        cout << "table after allGatherAsOneArray" << endl;
+        if (workerId == 1) {
+            cout << "tables after all gather:" << endl;
+            for (auto * table : *tables) {
+                harp::util::print::printTable(table);
+            }
+        }
+
+        cout << "table after allGather" << endl;
 //        printTable(workerId, tab);
 
         tab->clear();

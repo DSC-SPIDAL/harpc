@@ -41,6 +41,141 @@ namespace harp::com {
 
 
         /**
+         * Table of each worker is distributed to every other worker in the group
+         * all Tables are returned as a vector
+         * Tables are listed in the vector with respect to their rankings
+         * vector[0] has the table from worker 0, vector[1] has the table from worker 1, and so on ...
+         *
+         * Each partition of the tables are distributed separately, by using MPI allgather.
+         * If there are n partitions in worker tables, n mpi-allgather performed to distribute the tables
+         * two more all gathers are performed initially to exchage meta data
+         *
+         * All tables in workers have to have the same number of partitions
+         * otherwise, allgather is not performed with this method.
+         *
+         * @tparam TYPE
+         * @param table
+         * @return
+         */
+        template<class TYPE>
+        std::vector<ds::Table<TYPE> *> * allGatherAsPartitions(harp::ds::Table<TYPE> *table) {
+            // first gather all TableInfo sizes from all workers
+            int tableInfoSizes[worldSize];
+            ds::TableInfo tableInfo(table);
+            int tableInfoSize = tableInfo.getSerializedSize();
+
+            MPI_Allgather(
+                    &tableInfoSize,
+                    1,
+                    MPI_INT,
+                    tableInfoSizes,
+                    1,
+                    MPI_INT,
+                    MPI_COMM_WORLD
+            );
+
+            // second, gather all TableInfo objects from all workers
+            int displacements[worldSize];
+            displacements[0] = 0;
+            for (int i = 1; i < worldSize; i++) {
+                displacements[i] = displacements[i - 1] + tableInfoSizes[i - 1];
+            }
+
+            int totalInfoSizes = 0;
+            for (int i = 0; i < worldSize; i++) {
+                totalInfoSizes += tableInfoSizes[i];
+            }
+
+            auto * serializedTableInfo = tableInfo.serialize();
+            auto * allInfosSerialized = new int[totalInfoSizes];
+
+            MPI_Allgatherv(
+                    serializedTableInfo,
+                    tableInfo.getSerializedSize(),
+                    MPI_INT,
+                    allInfosSerialized,
+                    tableInfoSizes,
+                    displacements,
+                    MPI_INT,
+                    MPI_COMM_WORLD
+            );
+
+            std::vector<ds::TableInfo *> tableInfos;
+            for (int j = 0; j < worldSize; ++j) {
+                auto * tInfo = ds::TableInfo::deserialize(allInfosSerialized, displacements[j]);
+                tableInfos.push_back(tInfo);
+            }
+
+            // if all tables do not have the same number of partitions,
+            // do not perform all gather
+            int numberOfPartitions = tableInfo.getNumberOfPartitions();
+            for (const auto * tInfo: tableInfos) {
+                if (numberOfPartitions != tInfo->getNumberOfPartitions()) {
+                    std::cout << "To perform AllGather, all tables has to have the same number of partitions." << std::endl;
+                    return nullptr;
+                }
+            }
+
+            // all received tables
+            auto * tables = new std::vector<ds::Table<TYPE> *>();
+            for (int j = 0; j < worldSize; ++j) {
+                tables->push_back(new ds::Table<TYPE>(j));
+            }
+
+            // send each partition separately
+            int partitionSizes[worldSize];
+            for (int k = 0; k < numberOfPartitions; ++k) {
+
+                int totalPartitionSizes = 0;
+                int index = 0;
+                for (const auto * tInfo: tableInfos) {
+                    partitionSizes[index] = tInfo->getPartitionSizes()[k];
+                    totalPartitionSizes += partitionSizes[index];
+                    index++;
+                }
+
+                displacements[0] = 0;
+                for (int i = 1; i < worldSize; i++) {
+                    displacements[i] = displacements[i - 1] + partitionSizes[i - 1];
+                }
+
+                auto * partitionData = table->getPartition(k)->getData();
+                auto * allPartitionsData = new int[totalPartitionSizes];
+                MPI_Datatype dataType = getMPIDataType<TYPE>();
+
+                MPI_Allgatherv(
+                        partitionData,
+                        table->getPartition(k)->getSize(),
+                        dataType,
+                        allPartitionsData,
+                        partitionSizes,
+                        displacements,
+                        dataType,
+                        MPI_COMM_WORLD
+                );
+
+                // put all received partitions into their corresponding tables
+                for (int i = 0; i < worldSize; i++) {
+                    TYPE * pdata = new TYPE[partitionSizes[i]];
+                    std::copy(allPartitionsData + displacements[i], allPartitionsData + displacements[i] + partitionSizes[i], pdata);
+                    auto * partition = new ds::Partition<TYPE>(k, pdata, partitionSizes[i]);
+                    (*tables)[i]->addPartition(partition);
+                }
+
+                delete [] allPartitionsData;
+            }
+
+            // cleanup dynamic objects
+            delete [] serializedTableInfo;
+            delete [] allInfosSerialized;
+            for (auto tInfo: tableInfos) {
+                delete tInfo;
+            }
+
+            return tables;
+        }
+
+        /**
          * Table of each worker is distributed to every worker in the group
          * all Tables are returned as a vector
          * Tables are listed in the vector with respect to their rankings
@@ -55,7 +190,7 @@ namespace harp::com {
          * @return
          */
         template<class TYPE>
-        std::vector<ds::Table<TYPE> *> allGatherAsOneArray(harp::ds::Table<TYPE> *table) {
+        std::vector<ds::Table<TYPE> *> * allGatherAsOneArray(harp::ds::Table<TYPE> *table) {
             // first gather all TableInfo sizes from all workers
             int tableInfoSizes[worldSize];
             ds::TableInfo tableInfo(table);
@@ -134,10 +269,10 @@ namespace harp::com {
             );
 
             // all received tables
-            std::vector<ds::Table<TYPE> *> tables;
+            auto * tables = std::vector<ds::Table<TYPE> *>();
             for (int j = 0; j < worldSize; ++j) {
                 auto * tab = ds::TableInfo::deserializeTable<TYPE>(allTablesSerialized, tableInfos[j], displacements[j]);
-                tables.push_back(tab);
+                tables->push_back(tab);
             }
 
             // cleanup dynamic objects
@@ -152,133 +287,6 @@ namespace harp::com {
             return tables;
         }
 
-        template<class TYPE>
-        void allGatherOld(harp::ds::Table<TYPE> *table) {
-            auto *partitionCounts = new int[worldSize];//no of partitions in each node
-            int partitionCount = static_cast<int>(table->getPartitionCount());
-            MPI_Allgather(
-                    &partitionCount,
-                    1,
-                    MPI_INT,
-                    partitionCounts,
-                    1,
-                    MPI_INT,
-                    MPI_COMM_WORLD
-            );
-
-
-            int totalPartitionsInWorld = 0;
-            int *recvCounts = new int[worldSize];
-            int *displacements = new int[worldSize];
-            displacements[0] = 0;
-            for (int i = 0; i < worldSize; i++) {
-                totalPartitionsInWorld += partitionCounts[i];
-                recvCounts[i] = 1 + (partitionCounts[i] * 2);//size + [{id,size}]
-                if (i != 0) {
-                    displacements[i] = displacements[i - 1] + recvCounts[i];
-                }
-            }
-
-            int worldPartitionMetaDataSize = worldSize +
-                                             (totalPartitionsInWorld *
-                                              2);  //1*worldSize(for sizes) + [{id,size}]
-            long *worldPartitionMetaData = new long[worldPartitionMetaDataSize];
-
-            long thisNodeTotalDataSize = 0;//total size of data
-
-            int thisNodeMetaSendSize = static_cast<int>(1 +
-                                                        (table->getPartitionCount() * 2));//totalSize + [{id,size}]
-            long *thisNodePartitionMetaData = new long[thisNodeMetaSendSize];
-
-            int pIdIndex = 1;
-
-            std::vector<TYPE> thisNodeDataBuffer;
-            for (const auto p : *table->getPartitions()) {
-                std::copy(p.second->getData(), p.second->getData() + p.second->getSize(),
-                          std::back_inserter(thisNodeDataBuffer));
-                thisNodeTotalDataSize += p.second->getSize();
-                thisNodePartitionMetaData[pIdIndex++] = p.first;
-                thisNodePartitionMetaData[pIdIndex++] = p.second->getSize();
-            }
-            thisNodePartitionMetaData[0] = thisNodeTotalDataSize;
-
-//                std::cout << "Node " << workerId << " total size : " << thisNodeTotalDataSize << std::endl;
-//
-//                harp::util::print::printArray(thisNodePartitionMetaData, thisNodeMetaSendSize);
-
-
-            MPI_Allgatherv(
-                    thisNodePartitionMetaData,
-                    thisNodeMetaSendSize,
-                    MPI_LONG,
-                    worldPartitionMetaData,
-                    recvCounts,
-                    displacements,
-                    MPI_LONG,
-                    MPI_COMM_WORLD
-            );
-
-            // done meta data exchange
-//                if (workerId == 0) {
-//                    harp::util::print::printArray(worldPartitionMetaData, worldPartitionMetaDataSize);
-//                }
-
-            long totalDataSize = worldPartitionMetaData[0];
-            int tempLastIndex = 0;
-            recvCounts[0] = static_cast<int>(worldPartitionMetaData[0]); //todo cast?
-            displacements[0] = 0;
-            for (int i = 1; i < worldSize; i++) {
-                int thisIndex = tempLastIndex + (partitionCounts[i - 1] * 2) + 1;
-                displacements[i] = static_cast<int>(totalDataSize);
-                totalDataSize += worldPartitionMetaData[thisIndex];
-                recvCounts[i] = static_cast<int>(worldPartitionMetaData[thisIndex]);
-                tempLastIndex = thisIndex;
-            }
-
-            MPI_Datatype dataType = getMPIDataType<TYPE>();
-
-            auto *worldDataBuffer = new TYPE[totalDataSize];
-            MPI_Allgatherv(
-                    &thisNodeDataBuffer[0],
-                    static_cast<int>(thisNodeTotalDataSize),
-                    dataType,
-                    worldDataBuffer,
-                    recvCounts,
-                    displacements,
-                    dataType,
-                    MPI_COMM_WORLD
-            );
-
-//                if (workerId == 0) {
-//                    harp::util::print::printArray(worldDataBuffer, totalDataSize);
-//                }
-
-            //now we have all data
-            auto *recvTab = new harp::ds::Table<TYPE>(table->getId());
-            int lastIndex = 0;
-            int metaIndex = 0;
-            for (int i = 0; i < worldSize; i++) {
-                int noOfPartitions = partitionCounts[i];
-                metaIndex++;
-                for (int j = 0; j < noOfPartitions; j++) {
-                    int partitionId = static_cast<int>(worldPartitionMetaData[metaIndex++]);
-                    int partitionSize = static_cast<int>(worldPartitionMetaData[metaIndex++]);
-                    auto *partitionData = new TYPE[partitionSize];
-                    auto *partition = new harp::ds::Partition<TYPE>(partitionId, partitionData, partitionSize);
-                    std::copy(worldDataBuffer + lastIndex, worldDataBuffer + lastIndex + partitionSize,
-                              partitionData);
-//                        if (workerId == 0) {
-//                            std::cout << "pSize:" << partitionSize << std::endl;
-//                            harp::util::print::printPartition(partition);
-//                        }
-                    lastIndex += partitionSize;
-                    recvTab->addPartition(partition);
-                }
-            }
-
-            table->swap(recvTab);
-            harp::ds::util::deleteTable(recvTab, false);
-        }
 
         /**
          * perform allreduce on a table as a single array
