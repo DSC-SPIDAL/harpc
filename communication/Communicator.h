@@ -2,6 +2,7 @@
 #define HARPC_COMMUNICATOR_H
 
 #include <iostream>
+#include <memory>
 #include "mpi.h"
 #include "future"
 
@@ -39,8 +40,120 @@ namespace harp::com {
         }
 
 
+        /**
+         * Table of each worker is distributed to every worker in the group
+         * all Tables are returned as a vector
+         * Tables are listed in the vector with respect to their rankings
+         * vector[0] has the table from worker 0, vector[1] has the table from worker 1, and so on ...
+         *
+         * Each table of every worker is first serialized as a single array,
+         * then MPI allgather performed,
+         * at the last step, all received serialized arrays are converted into Table objects again
+         *
+         * @tparam TYPE
+         * @param table
+         * @return
+         */
         template<class TYPE>
-        void allGather(harp::ds::Table<TYPE> *table) {
+        std::vector<ds::Table<TYPE> *> allGatherAsOneArray(harp::ds::Table<TYPE> *table) {
+            // first gather all TableInfo sizes from all workers
+            int tableInfoSizes[worldSize];
+            ds::TableInfo tableInfo(table);
+            int tableInfoSize = tableInfo.getSerializedSize();
+
+            MPI_Allgather(
+                    &tableInfoSize,
+                    1,
+                    MPI_INT,
+                    tableInfoSizes,
+                    1,
+                    MPI_INT,
+                    MPI_COMM_WORLD
+            );
+
+            // second, gather all TableInfo objects from all workers
+            int displacements[worldSize];
+            displacements[0] = 0;
+            for (int i = 1; i < worldSize; i++) {
+                displacements[i] = displacements[i - 1] + tableInfoSizes[i - 1];
+            }
+
+            int totalInfoSizes = 0;
+            for (int i = 0; i < worldSize; i++) {
+                totalInfoSizes += tableInfoSizes[i];
+            }
+
+            auto * serializedTableInfo = tableInfo.serialize();
+            auto * allInfosSerialized = new int[totalInfoSizes];
+
+            MPI_Allgatherv(
+                    serializedTableInfo,
+                    tableInfo.getSerializedSize(),
+                    MPI_INT,
+                    allInfosSerialized,
+                    tableInfoSizes,
+                    displacements,
+                    MPI_INT,
+                    MPI_COMM_WORLD
+            );
+
+            std::vector<ds::TableInfo *> tableInfos;
+            for (int j = 0; j < worldSize; ++j) {
+                auto * tInfo = ds::TableInfo::deserialize(allInfosSerialized, displacements[j]);
+                tableInfos.push_back(tInfo);
+            }
+
+            // send Table as a serialized array to all and receive the Tables of all others similarly
+            int totalTableSizes = 0;
+            int tableSizes[worldSize];
+            int index = 0;
+            for (const auto * tInfo: tableInfos) {
+                tableSizes[index] = tInfo->getSerializedTableSize();
+                totalTableSizes += tableSizes[index];
+                index++;
+            }
+
+            displacements[0] = 0;
+            for (int i = 1; i < worldSize; i++) {
+                displacements[i] = displacements[i - 1] + tableSizes[i - 1];
+            }
+
+            auto * serializedTable = table->serialize();
+            auto * allTablesSerialized = new int[totalTableSizes];
+            MPI_Datatype dataType = getMPIDataType<TYPE>();
+
+            MPI_Allgatherv(
+                    serializedTable,
+                    table->getSerializedSize(),
+                    dataType,
+                    allTablesSerialized,
+                    tableSizes,
+                    displacements,
+                    dataType,
+                    MPI_COMM_WORLD
+            );
+
+            // all received tables
+            std::vector<ds::Table<TYPE> *> tables;
+            for (int j = 0; j < worldSize; ++j) {
+                auto * tab = ds::TableInfo::deserializeTable<TYPE>(allTablesSerialized, tableInfos[j], displacements[j]);
+                tables.push_back(tab);
+            }
+
+            // cleanup dynamic objects
+            delete [] serializedTableInfo;
+            delete [] allInfosSerialized;
+            for (auto tInfo: tableInfos) {
+                delete tInfo;
+            }
+            delete [] serializedTable;
+            delete [] allTablesSerialized;
+
+            return tables;
+        }
+
+        template<class TYPE>
+        void allGatherOld(harp::ds::Table<TYPE> *table) {
             auto *partitionCounts = new int[worldSize];//no of partitions in each node
             int partitionCount = static_cast<int>(table->getPartitionCount());
             MPI_Allgather(
@@ -188,8 +301,8 @@ namespace harp::com {
                     MPI_COMM_WORLD
             );
 
-            auto * tableInfo = new ds::TableInfo(table);
-            auto * reducedTable = ds::TableInfo::deserializeTable(reducedData, tableInfo);
+            auto *tableInfo = new ds::TableInfo(table);
+            auto *reducedTable = ds::TableInfo::deserializeTable(reducedData, tableInfo);
             table->swap(reducedTable);
 
             delete tableInfo;
@@ -235,8 +348,6 @@ namespace harp::com {
          *  broadcasting TableInfo size
          *  broadcasting TableInfo
          *  broadcasting each table partition separately
-         *
-         *  todo: broadcasting whole table at once, instead of sending each partition separately
          *
          * @tparam TYPE
          * @param table

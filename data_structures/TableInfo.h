@@ -32,88 +32,44 @@ namespace harp::ds {
             }
         }
 
-        TableInfo(int nOfPartitions, int * ids, int * sizes) : numberOfPartitions(nOfPartitions) {
-            partitionIDs = ids;
-            partitionSizes = sizes;
-        }
+        TableInfo(int nOfPartitions, int * ids, int * sizes);
 
-        ~TableInfo() {
-            delete[] partitionIDs;
-            delete[] partitionSizes;
-        }
+        ~TableInfo();
 
-        int getTableID() {
-            return tableID;
-        }
+        int getTableID() const ;
 
-        int getNumberOfPartitions() {
-            return numberOfPartitions;
-        }
+        int getNumberOfPartitions() const ;
 
-        int * getPartitionIDs() {
-            return partitionIDs;
-        }
+        int * getPartitionIDs() const ;
 
-        int * getPartitionSizes() {
-            return partitionSizes;
-        }
+        int * getPartitionSizes() const ;
 
-        /**
-         * total of all partition sizes
-         * this is equal to serialized Table data size
-         * @return
-         */
-        int getSerializedTableSize() {
-            int size = 0;
-            for (int i = 0; i < numberOfPartitions; ++i) {
-                size += partitionSizes[i];
-            }
-            return size;
-        }
+        void print() const ;
 
-        int * serialize() {
 
-            int * data = new int[getSerializedSize()];
-            data[0] = tableID;
-            data[1] = numberOfPartitions;
-            int index = 2;
-            for (int i = 0; i < numberOfPartitions; ++i) {
-                data[index++] = partitionIDs[i];
-                data[index++] = partitionSizes[i];
-            }
+            /**
+             * total of all partition sizes
+             * this is equal to serialized Table data size
+             * @return
+             */
+        int getSerializedTableSize() const ;
 
-            return data;
-        }
+        int * serialize();
 
         /**
          * deserialize TableInfo
          * @param data
          * @return
          */
-        static TableInfo * deserialize(int * data) {
+        static TableInfo * deserialize(int * data, int offset = 0);
 
-            int tId = data[0];
-            int nOfPartitions = data[1];
-            int * ids = new int[nOfPartitions];
-            int * sizes = new int[nOfPartitions];
-            int index = 2;
-            for (int i = 0; i < nOfPartitions; ++i) {
-                ids[i] = data[index++];
-                sizes[i] = data[index++];
-            }
-
-            return new TableInfo(nOfPartitions, ids, sizes);
-        }
-
-        int getSerializedSize() {
-            return 2 + numberOfPartitions + numberOfPartitions;
-        }
+        int getSerializedSize();
 
         template<class TYPE>
-        static Table<TYPE> * deserializeTable(TYPE * serializedData, TableInfo * tableInfo) {
+        static Table<TYPE> * deserializeTable(TYPE * serializedData, TableInfo * tableInfo, int offset = 0) {
             Table<TYPE> * table = new Table<TYPE>(tableInfo->getTableID());
 
-            int dataIndex = 0;
+            int dataIndex = offset;
 
             for (int i = 0; i < tableInfo->getNumberOfPartitions(); ++i) {
                 int pSize = tableInfo->getPartitionSizes()[i];

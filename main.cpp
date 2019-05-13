@@ -40,8 +40,8 @@ Table<TYPE> * createTable(int tableId, int maxPartitions, int maxPartitionSize, 
     auto *tab = new Table<TYPE>(tableId);
 
     srand(workerId + time(NULL));
-    int numOfPartitions = 2;
-//    int numOfPartitions = rand() % maxPartitions + 1;
+//    int numOfPartitions = 0;
+    int numOfPartitions = rand() % maxPartitions;
     cout << "number of partitions: " << numOfPartitions << endl;
 
     for (int p = 0; p < numOfPartitions; p++) {
@@ -61,8 +61,8 @@ class MyWorker : public harp::worker::Worker {
 
     void execute(Communicator *comm, int argc = 0, char *argv[] = NULL) override {
 
+        testAllGather(comm);
 //        testAllReduce(comm);
-        testAllReduce(comm);
 //        testBroadcast(comm);
     }
 
@@ -126,15 +126,14 @@ class MyWorker : public harp::worker::Worker {
 
     void testAllGather(Communicator *comm) {
 
-        Table<int> * tab;
-        tab = createTable<int>(0, 3, 10, 1000, workerId);
+        Table<int> * tab = createTable<int>(0, 4, 10, 1000, workerId);
         printTable(workerId, tab);
 
         // broadcast from 0 to all
-        comm->allGather(tab);
+        comm->allGatherAsOneArray(tab);
 
-        cout << "table after allGather" << endl;
-        printTable(workerId, tab);
+        cout << "table after allGatherAsOneArray" << endl;
+//        printTable(workerId, tab);
 
         tab->clear();
     }

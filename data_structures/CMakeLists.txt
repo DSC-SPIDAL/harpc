@@ -4,8 +4,8 @@ project(harp_data_structures)
 include_directories(${MPI_INCLUDE_PATH})
 
 add_library(
-        harp_data_structures INTERFACE
-        )
+        harp_data_structures
+        TableInfo.cpp)
 
 #target_link_libraries(
 #        harp_data_structures INTERFACE
