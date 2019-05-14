@@ -56,6 +56,10 @@ namespace harp::ds {
             return this->id;
         }
 
+        void setId(int tid) {
+            this->id = tid;
+        }
+
         long getPartitionCount() {
             return this->partitionMap.size();
         }

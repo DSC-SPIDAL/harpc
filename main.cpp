@@ -131,8 +131,8 @@ class MyWorker : public harp::worker::Worker {
         printTable(workerId, tab);
 
         // broadcast from 0 to all
-//        comm->allGatherAsOneArray(tab);
-        auto tables = comm->allGatherAsPartitions(tab);
+        auto tables = comm->allGatherAsOneArray(tab);
+//        auto tables = comm->allGatherAsPartitions(tab);
 
         if (workerId == 1) {
             cout << "tables after all gather:" << endl;
@@ -152,8 +152,9 @@ class MyWorker : public harp::worker::Worker {
         Table<double> * tab = createTable<double>(0, 4, 10, 1000, workerId);
         printTable(workerId, tab);
 
-        int rootWorkerId = 0;
-        auto tables = comm->gatherAsPartitions(tab, rootWorkerId);
+        int rootWorkerId = 3;
+//        auto tables = comm->gatherAsPartitions(tab, rootWorkerId);
+        auto tables = comm->gatherAsOneArray(tab, rootWorkerId);
 
         if (workerId == rootWorkerId) {
             cout << "tables after gather:" << endl;

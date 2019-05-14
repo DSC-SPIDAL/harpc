@@ -44,6 +44,7 @@ namespace harp::com {
          * all Tables are returned as a vector
          * Tables are listed in the vector with respect to their rankings
          * (*vector)[0] has the table from worker 0, (*vector)[1] has the table from worker 1, and so on ...
+         * Table IDs are set as worker ranks
          *
          * Tables in workers may have different number of partitions
          * However, we assume that partitions IDs start from zero and increase sequentially
@@ -93,8 +94,8 @@ namespace harp::com {
                 totalInfoSizes += tableInfoSizes[i];
             }
 
-            auto * serializedTableInfo = tableInfo.serialize();
-            auto * allInfosSerialized = new int[totalInfoSizes];
+            auto *serializedTableInfo = tableInfo.serialize();
+            auto *allInfosSerialized = new int[totalInfoSizes];
 
             MPI_Allgatherv(
                     serializedTableInfo,
@@ -109,19 +110,19 @@ namespace harp::com {
 
             std::vector<ds::TableInfo *> tableInfos;
             for (int j = 0; j < worldSize; ++j) {
-                auto * tInfo = ds::TableInfo::deserialize(allInfosSerialized, displacements[j]);
+                auto *tInfo = ds::TableInfo::deserialize(allInfosSerialized, displacements[j]);
                 tableInfos.push_back(tInfo);
             }
 
             int maxPartitions = 0;
-            for (const auto * tInfo: tableInfos) {
+            for (const auto *tInfo: tableInfos) {
                 if (maxPartitions < tInfo->getNumberOfPartitions()) {
                     maxPartitions = tInfo->getNumberOfPartitions();
                 }
             }
 
             // all received tables
-            std::vector<ds::Table<TYPE> *> * tables = nullptr;
+            std::vector<ds::Table<TYPE> *> *tables = nullptr;
             if (workerId == rootWorkerId) {
                 tables = new std::vector<ds::Table<TYPE> *>();
                 for (int j = 0; j < worldSize; ++j) {
@@ -131,7 +132,7 @@ namespace harp::com {
 
             // send each partition separately
             // TODO: we assume that partition IDs in tables start from zero and increase sequentially
-            int * partitionSizes = nullptr;
+            int *partitionSizes = nullptr;
             if (workerId == rootWorkerId) {
                 partitionSizes = new int[worldSize];
             }
@@ -139,12 +140,12 @@ namespace harp::com {
             for (int k = 0; k < maxPartitions; ++k) {
 
                 // send partition only if this worker has it
-                TYPE * partitionData = nullptr;
+                TYPE *partitionData = nullptr;
                 if (k < tableInfo.getNumberOfPartitions()) {
                     partitionData = table->getPartition(k)->getData();
                 }
 
-                TYPE * allPartitionsData = nullptr;
+                TYPE *allPartitionsData = nullptr;
                 if (workerId == rootWorkerId) {
 
                     int totalPartitionSizes = 0;
@@ -191,16 +192,160 @@ namespace harp::com {
                     }
                 }
 
-                delete [] allPartitionsData;
+                delete[] allPartitionsData;
             }
 
             // cleanup dynamic objects
-            delete [] serializedTableInfo;
-            delete [] allInfosSerialized;
+            delete[] serializedTableInfo;
+            delete[] allInfosSerialized;
             for (auto tInfo: tableInfos) {
                 delete tInfo;
             }
-            delete [] partitionSizes;
+            delete[] partitionSizes;
+
+            return tables;
+        }
+
+        /**
+         * Table of each worker is distributed to the root worker
+         * all Tables are returned as a vector
+         * Tables are listed in the vector with respect to their rankings
+         * (*vector)[0] has the table from worker 0, (*vector)[1] has the table from worker 1, and so on ...
+         * Table IDs are set as worker ranks
+         *
+         * Each table of every worker is first serialized as a single array,
+         * then MPI gather performed,
+         * at the last step, all received serialized arrays are converted into Table objects again
+         *
+         * This version of gather requires two array copies: one before sending and one after receiving
+         * so, it is not recommended for tables with large partitions
+         * They should use gatherAsPartitions method instead
+         *
+         * @tparam TYPE
+         * @param table
+         * @return
+         */
+        template<class TYPE>
+        std::vector<ds::Table<TYPE> *> * gatherAsOneArray(harp::ds::Table<TYPE> *table, int rootWorkerId) {
+            // first gather all TableInfo sizes from all workers
+            ds::TableInfo tableInfo(table);
+            int tableInfoSize = tableInfo.getSerializedSize();
+            int *tableInfoSizes = nullptr;
+            if (workerId == rootWorkerId) {
+                tableInfoSizes = new int[worldSize];
+            }
+
+            MPI_Gather(
+                    &tableInfoSize,
+                    1,
+                    MPI_INT,
+                    tableInfoSizes,
+                    1,
+                    MPI_INT,
+                    rootWorkerId,
+                    MPI_COMM_WORLD
+            );
+
+            // second, gather all TableInfo objects from all workers
+            auto * serializedTableInfo = tableInfo.serialize();
+            int * allInfosSerialized = nullptr;
+            int * displacements = nullptr;
+
+            if (workerId == rootWorkerId) {
+                displacements = new int[worldSize];
+
+                displacements[0] = 0;
+                for (int i = 1; i < worldSize; i++) {
+                    displacements[i] = displacements[i - 1] + tableInfoSizes[i - 1];
+                }
+
+                int totalInfoSizes = 0;
+                for (int i = 0; i < worldSize; i++) {
+                    totalInfoSizes += tableInfoSizes[i];
+                }
+                allInfosSerialized = new int[totalInfoSizes];
+            }
+
+            MPI_Gatherv(
+                    serializedTableInfo,
+                    tableInfo.getSerializedSize(),
+                    MPI_INT,
+                    allInfosSerialized,
+                    tableInfoSizes,
+                    displacements,
+                    MPI_INT,
+                    rootWorkerId,
+                    MPI_COMM_WORLD
+            );
+
+            std::vector<ds::TableInfo *> tableInfos;
+            if (workerId == rootWorkerId) {
+                for (int j = 0; j < worldSize; ++j) {
+                    auto *tInfo = ds::TableInfo::deserialize(allInfosSerialized, displacements[j]);
+                    tableInfos.push_back(tInfo);
+                }
+            }
+
+            // send Table as a serialized array to the root
+            auto * serializedTable = table->serialize();
+            TYPE * allTablesSerialized = nullptr;
+            int * tableSizes = nullptr;
+
+            if (workerId == rootWorkerId) {
+                tableSizes = new int[worldSize];
+                int totalTableSizes = 0;
+                int index = 0;
+                for (const auto *tInfo: tableInfos) {
+                    tableSizes[index] = tInfo->getSerializedTableSize();
+                    totalTableSizes += tableSizes[index];
+                    index++;
+                }
+
+                displacements[0] = 0;
+                for (int i = 1; i < worldSize; i++) {
+                    displacements[i] = displacements[i - 1] + tableSizes[i - 1];
+                }
+
+                allTablesSerialized = new TYPE[totalTableSizes];
+            }
+
+            MPI_Datatype dataType = getMPIDataType<TYPE>();
+
+            MPI_Gatherv(
+                    serializedTable,
+                    table->getSerializedSize(),
+                    dataType,
+                    allTablesSerialized,
+                    tableSizes,
+                    displacements,
+                    dataType,
+                    rootWorkerId,
+                    MPI_COMM_WORLD
+            );
+
+            // all received tables
+            std::vector<ds::Table<TYPE> *> * tables = nullptr;
+            if (workerId == rootWorkerId) {
+                tables = new std::vector<ds::Table<TYPE> *>();
+                for (int j = 0; j < worldSize; ++j) {
+                    auto *tab = ds::TableInfo::deserializeTable<TYPE>(allTablesSerialized, tableInfos[j],
+                                                                      displacements[j]);
+                    tab->setId(j);
+                    tables->push_back(tab);
+                }
+            }
+
+            // cleanup dynamic objects
+            delete[] tableInfoSizes;
+            delete[] serializedTableInfo;
+            delete[] displacements;
+            delete[] allInfosSerialized;
+            for (auto tInfo: tableInfos) {
+                delete tInfo;
+            }
+            delete[] serializedTable;
+            delete[] allTablesSerialized;
+            delete[] tableSizes;
 
             return tables;
         }
@@ -210,6 +355,7 @@ namespace harp::com {
          * all Tables are returned as a vector
          * Tables are listed in the vector with respect to their rankings
          * (*vector)[0] has the table from worker 0, (*vector)[1] has the table from worker 1, and so on ...
+         * Table IDs are set as worker ranks
          *
          * Tables in workers may have different number of partitions
          * However, we assume that partitions IDs start from zero and increase sequentially
@@ -259,8 +405,8 @@ namespace harp::com {
                 totalInfoSizes += tableInfoSizes[i];
             }
 
-            auto * serializedTableInfo = tableInfo.serialize();
-            auto * allInfosSerialized = new int[totalInfoSizes];
+            auto *serializedTableInfo = tableInfo.serialize();
+            auto *allInfosSerialized = new int[totalInfoSizes];
 
             MPI_Allgatherv(
                     serializedTableInfo,
@@ -275,19 +421,19 @@ namespace harp::com {
 
             std::vector<ds::TableInfo *> tableInfos;
             for (int j = 0; j < worldSize; ++j) {
-                auto * tInfo = ds::TableInfo::deserialize(allInfosSerialized, displacements[j]);
+                auto *tInfo = ds::TableInfo::deserialize(allInfosSerialized, displacements[j]);
                 tableInfos.push_back(tInfo);
             }
 
             int maxPartitions = 0;
-            for (const auto * tInfo: tableInfos) {
+            for (const auto *tInfo: tableInfos) {
                 if (maxPartitions < tInfo->getNumberOfPartitions()) {
                     maxPartitions = tInfo->getNumberOfPartitions();
                 }
             }
 
             // all received tables
-            auto * tables = new std::vector<ds::Table<TYPE> *>();
+            auto *tables = new std::vector<ds::Table<TYPE> *>();
             for (int j = 0; j < worldSize; ++j) {
                 tables->push_back(new ds::Table<TYPE>(j));
             }
@@ -299,7 +445,7 @@ namespace harp::com {
 
                 int totalPartitionSizes = 0;
                 int index = 0;
-                for (const auto * tInfo: tableInfos) {
+                for (const auto *tInfo: tableInfos) {
                     partitionSizes[index] = tInfo->getPartitionSize(k);
                     totalPartitionSizes += partitionSizes[index];
                     index++;
@@ -311,11 +457,11 @@ namespace harp::com {
                 }
 
                 // send partition only if this worker has it
-                TYPE * partitionData = nullptr;
+                TYPE *partitionData = nullptr;
                 if (k < tableInfo.getNumberOfPartitions()) {
                     partitionData = table->getPartition(k)->getData();
                 }
-                auto * allPartitionsData = new TYPE[totalPartitionSizes];
+                auto *allPartitionsData = new TYPE[totalPartitionSizes];
                 MPI_Datatype dataType = getMPIDataType<TYPE>();
 
                 MPI_Allgatherv(
@@ -341,12 +487,12 @@ namespace harp::com {
                     }
                 }
 
-                delete [] allPartitionsData;
+                delete[] allPartitionsData;
             }
 
             // cleanup dynamic objects
-            delete [] serializedTableInfo;
-            delete [] allInfosSerialized;
+            delete[] serializedTableInfo;
+            delete[] allInfosSerialized;
             for (auto tInfo: tableInfos) {
                 delete tInfo;
             }
@@ -359,6 +505,7 @@ namespace harp::com {
          * all Tables are returned as a vector
          * Tables are listed in the vector with respect to their rankings
          * (*vector)[0] has the table from worker 0, (*vector)[1] has the table from worker 1, and so on ...
+         * Table IDs are set as worker ranks
          *
          * Each table of every worker is first serialized as a single array,
          * then MPI allgather performed,
@@ -401,8 +548,8 @@ namespace harp::com {
                 totalInfoSizes += tableInfoSizes[i];
             }
 
-            auto * serializedTableInfo = tableInfo.serialize();
-            auto * allInfosSerialized = new int[totalInfoSizes];
+            auto *serializedTableInfo = tableInfo.serialize();
+            auto *allInfosSerialized = new int[totalInfoSizes];
 
             MPI_Allgatherv(
                     serializedTableInfo,
@@ -417,7 +564,7 @@ namespace harp::com {
 
             std::vector<ds::TableInfo *> tableInfos;
             for (int j = 0; j < worldSize; ++j) {
-                auto * tInfo = ds::TableInfo::deserialize(allInfosSerialized, displacements[j]);
+                auto *tInfo = ds::TableInfo::deserialize(allInfosSerialized, displacements[j]);
                 tableInfos.push_back(tInfo);
             }
 
@@ -425,7 +572,7 @@ namespace harp::com {
             int totalTableSizes = 0;
             int tableSizes[worldSize];
             int index = 0;
-            for (const auto * tInfo: tableInfos) {
+            for (const auto *tInfo: tableInfos) {
                 tableSizes[index] = tInfo->getSerializedTableSize();
                 totalTableSizes += tableSizes[index];
                 index++;
@@ -436,8 +583,8 @@ namespace harp::com {
                 displacements[i] = displacements[i - 1] + tableSizes[i - 1];
             }
 
-            auto * serializedTable = table->serialize();
-            auto * allTablesSerialized = new TYPE[totalTableSizes];
+            auto *serializedTable = table->serialize();
+            auto *allTablesSerialized = new TYPE[totalTableSizes];
             MPI_Datatype dataType = getMPIDataType<TYPE>();
 
             MPI_Allgatherv(
@@ -452,20 +599,21 @@ namespace harp::com {
             );
 
             // all received tables
-            auto * tables = std::vector<ds::Table<TYPE> *>();
+            auto * tables = new std::vector<ds::Table<TYPE> *>();
             for (int j = 0; j < worldSize; ++j) {
-                auto * tab = ds::TableInfo::deserializeTable<TYPE>(allTablesSerialized, tableInfos[j], displacements[j]);
+                auto *tab = ds::TableInfo::deserializeTable<TYPE>(allTablesSerialized, tableInfos[j], displacements[j]);
+                tab->setId(j);
                 tables->push_back(tab);
             }
 
             // cleanup dynamic objects
-            delete [] serializedTableInfo;
-            delete [] allInfosSerialized;
+            delete[] serializedTableInfo;
+            delete[] allInfosSerialized;
             for (auto tInfo: tableInfos) {
                 delete tInfo;
             }
-            delete [] serializedTable;
-            delete [] allTablesSerialized;
+            delete[] serializedTable;
+            delete[] allTablesSerialized;
 
             return tables;
         }
