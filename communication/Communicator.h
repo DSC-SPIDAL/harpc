@@ -230,7 +230,7 @@ namespace harp::com {
             // first gather all TableInfo sizes from all workers
             ds::TableInfo tableInfo(table);
             int tableInfoSize = tableInfo.getSerializedSize();
-            int *tableInfoSizes = nullptr;
+            int * tableInfoSizes = nullptr;
             if (workerId == rootWorkerId) {
                 tableInfoSizes = new int[worldSize];
             }
@@ -248,6 +248,7 @@ namespace harp::com {
 
             // second, gather all TableInfo objects from all workers
             auto * serializedTableInfo = tableInfo.serialize();
+
             int * allInfosSerialized = nullptr;
             int * displacements = nullptr;
 

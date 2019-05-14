@@ -32,7 +32,7 @@ namespace harp::ds {
             }
         }
 
-        TableInfo(int nOfPartitions, int * ids, int * sizes);
+        TableInfo(int id, int nOfPartitions, int * ids, int * sizes);
 
         ~TableInfo();
 

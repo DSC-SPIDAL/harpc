@@ -7,7 +7,8 @@
 
 namespace harp::ds {
 
-    TableInfo::TableInfo(int nOfPartitions, int * ids, int * sizes) : numberOfPartitions(nOfPartitions) {
+    TableInfo::TableInfo(int id, int nOfPartitions, int * ids, int * sizes) :
+    tableID(id), numberOfPartitions(nOfPartitions) {
         partitionIDs = ids;
         partitionSizes = sizes;
     }
@@ -78,7 +79,7 @@ namespace harp::ds {
             sizes[i] = data[index++];
         }
 
-        return new TableInfo(nOfPartitions, ids, sizes);
+        return new TableInfo(tId, nOfPartitions, ids, sizes);
     }
 
     int TableInfo::getSerializedSize() {
