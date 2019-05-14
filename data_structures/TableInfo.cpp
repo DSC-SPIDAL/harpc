@@ -25,6 +25,17 @@ namespace harp::ds {
         return numberOfPartitions;
     }
 
+    int TableInfo::getPartitionSize(int pid) const {
+        // first find pid in id array
+        for (int i = 0; i < numberOfPartitions; ++i) {
+            if (pid == partitionIDs[i]) {
+                return partitionSizes[i];
+            }
+        }
+
+        return 0;
+    }
+
     int * TableInfo::getPartitionIDs() const {
         return partitionIDs;
     }

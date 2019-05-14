@@ -44,6 +44,14 @@ namespace harp::ds {
 
         int * getPartitionSizes() const ;
 
+        /**
+         * return partition size for the given partition id
+         * zero returned if the partition does not exist or partition size is zero
+         * @param pid
+         * @return
+         */
+        int getPartitionSize(int pid) const ;
+
         void print() const ;
 
 

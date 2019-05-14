@@ -183,12 +183,12 @@ namespace harp::com {
          * If there are n partitions in worker tables, n mpi-allgather operation performed to distribute the tables
          * two more all gather operations are performed initially to exchange meta data
          *
-         * All tables in workers have to have the same number of partitions
-         * otherwise, allgather is not performed with this method.
+         * Tables in workers may have different number of partitions
+         * However, we assume that partitions IDs start from zero and increase sequentially
          *
          * When sending out partitions, no array copying is performed
-         * however, on receiving array copying parformed to create partitions
-         *  TODO: Avoid array copying on partition receive.
+         * however, on receiving, array copying performed to create partitions
+         * TODO: Avoid array copying on partition receive.
          *      Currently each partition has a separate array.
          *      Received data array has partitions of many tables.
          *      So, a single array should be able have the data of many partitions
@@ -246,13 +246,10 @@ namespace harp::com {
                 tableInfos.push_back(tInfo);
             }
 
-            // if all tables do not have the same number of partitions,
-            // do not perform all gather
-            int numberOfPartitions = tableInfo.getNumberOfPartitions();
+            int maxPartitions = 0;
             for (const auto * tInfo: tableInfos) {
-                if (numberOfPartitions != tInfo->getNumberOfPartitions()) {
-                    std::cout << "To perform AllGather, all tables has to have the same number of partitions." << std::endl;
-                    return nullptr;
+                if (maxPartitions < tInfo->getNumberOfPartitions()) {
+                    maxPartitions = tInfo->getNumberOfPartitions();
                 }
             }
 
@@ -263,13 +260,14 @@ namespace harp::com {
             }
 
             // send each partition separately
+            // TODO: we assume that partition IDs in tables start from zero and increase sequentially
             int partitionSizes[worldSize];
-            for (int k = 0; k < numberOfPartitions; ++k) {
+            for (int k = 0; k < maxPartitions; ++k) {
 
                 int totalPartitionSizes = 0;
                 int index = 0;
                 for (const auto * tInfo: tableInfos) {
-                    partitionSizes[index] = tInfo->getPartitionSizes()[k];
+                    partitionSizes[index] = tInfo->getPartitionSize(k);
                     totalPartitionSizes += partitionSizes[index];
                     index++;
                 }
@@ -279,13 +277,17 @@ namespace harp::com {
                     displacements[i] = displacements[i - 1] + partitionSizes[i - 1];
                 }
 
-                auto * partitionData = table->getPartition(k)->getData();
+                // send partition only if this worker has it
+                TYPE * partitionData = nullptr;
+                if (k < tableInfo.getNumberOfPartitions()) {
+                    partitionData = table->getPartition(k)->getData();
+                }
                 auto * allPartitionsData = new int[totalPartitionSizes];
                 MPI_Datatype dataType = getMPIDataType<TYPE>();
 
                 MPI_Allgatherv(
                         partitionData,
-                        table->getPartition(k)->getSize(),
+                        tableInfo.getPartitionSize(k),
                         dataType,
                         allPartitionsData,
                         partitionSizes,
@@ -296,10 +298,14 @@ namespace harp::com {
 
                 // put all received partitions into their corresponding tables
                 for (int i = 0; i < worldSize; i++) {
-                    TYPE * pdata = new TYPE[partitionSizes[i]];
-                    std::copy(allPartitionsData + displacements[i], allPartitionsData + displacements[i] + partitionSizes[i], pdata);
-                    auto * partition = new ds::Partition<TYPE>(k, pdata, partitionSizes[i]);
-                    (*tables)[i]->addPartition(partition);
+                    if (partitionSizes[i] > 0) {
+                        TYPE *pdata = new TYPE[partitionSizes[i]];
+                        std::copy(allPartitionsData + displacements[i],
+                                  allPartitionsData + displacements[i] + partitionSizes[i],
+                                  pdata);
+                        auto *partition = new ds::Partition<TYPE>(k, pdata, partitionSizes[i]);
+                        (*tables)[i]->addPartition(partition);
+                    }
                 }
 
                 delete [] allPartitionsData;
