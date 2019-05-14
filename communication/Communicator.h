@@ -39,19 +39,159 @@ namespace harp::com {
             MPI_Barrier(MPI_COMM_WORLD);
         }
 
+        template<class TYPE>
+        std::vector<ds::Table<TYPE> *> * gatherAsPartitions(harp::ds::Table<TYPE> *table, int rootWorkerId) {
+            // first gather all TableInfo sizes from all workers
+            ds::TableInfo tableInfo(table);
+            int tableInfoSize = tableInfo.getSerializedSize();
+            int * tableInfoSizes = nullptr;
+            if (workerId == rootWorkerId) {
+                tableInfoSizes = new int[worldSize];
+            }
+
+            MPI_Gather(
+                    &tableInfoSize,
+                    1,
+                    MPI_INT,
+                    tableInfoSizes,
+                    1,
+                    MPI_INT,
+                    rootWorkerId,
+                    MPI_COMM_WORLD
+            );
+
+            // second, gather all TableInfo objects to root worker
+            int * displacements = nullptr;
+            int totalInfoSizes = 0;
+            int * serializedTableInfo = tableInfo.serialize();
+            int * allInfosSerialized = nullptr;
+
+            if (workerId == rootWorkerId) {
+                displacements = new int[worldSize];
+                displacements[0] = 0;
+                for (int i = 1; i < worldSize; i++) {
+                    displacements[i] = displacements[i - 1] + tableInfoSizes[i - 1];
+                }
+
+                for (int i = 0; i < worldSize; i++) {
+                    totalInfoSizes += tableInfoSizes[i];
+                }
+
+                allInfosSerialized = new int[totalInfoSizes];
+            }
+
+
+            MPI_Gatherv(
+                    serializedTableInfo,
+                    tableInfo.getSerializedSize(),
+                    MPI_INT,
+                    allInfosSerialized,
+                    tableInfoSizes,
+                    displacements,
+                    MPI_INT,
+                    rootWorkerId,
+                    MPI_COMM_WORLD
+            );
+
+            std::vector<ds::TableInfo *> tableInfos;
+            if (workerId == rootWorkerId) {
+                for (int j = 0; j < worldSize; ++j) {
+                    auto *tInfo = ds::TableInfo::deserialize(allInfosSerialized, displacements[j]);
+                    tableInfos.push_back(tInfo);
+                }
+            }
+/////// to continue
+            // if all tables do not have the same number of partitions,
+            // do not perform all gather
+            int numberOfPartitions = tableInfo.getNumberOfPartitions();
+            for (const auto * tInfo: tableInfos) {
+                if (numberOfPartitions != tInfo->getNumberOfPartitions()) {
+                    std::cout << "To perform AllGather, all tables has to have the same number of partitions." << std::endl;
+                    return nullptr;
+                }
+            }
+
+            // all received tables
+            auto * tables = new std::vector<ds::Table<TYPE> *>();
+
+            for (int j = 0; j < worldSize; ++j) {
+                tables->push_back(new ds::Table<TYPE>(j));
+            }
+
+            // send each partition separately
+            int partitionSizes[worldSize];
+            for (int k = 0; k < numberOfPartitions; ++k) {
+
+                int totalPartitionSizes = 0;
+                int index = 0;
+                for (const auto * tInfo: tableInfos) {
+                    partitionSizes[index] = tInfo->getPartitionSizes()[k];
+                    totalPartitionSizes += partitionSizes[index];
+                    index++;
+                }
+
+                displacements[0] = 0;
+                for (int i = 1; i < worldSize; i++) {
+                    displacements[i] = displacements[i - 1] + partitionSizes[i - 1];
+                }
+
+                auto * partitionData = table->getPartition(k)->getData();
+                auto * allPartitionsData = new int[totalPartitionSizes];
+                MPI_Datatype dataType = getMPIDataType<TYPE>();
+
+                MPI_Allgatherv(
+                        partitionData,
+                        table->getPartition(k)->getSize(),
+                        dataType,
+                        allPartitionsData,
+                        partitionSizes,
+                        displacements,
+                        dataType,
+                        MPI_COMM_WORLD
+                );
+
+                // put all received partitions into their corresponding tables
+                for (int i = 0; i < worldSize; i++) {
+                    TYPE * pdata = new TYPE[partitionSizes[i]];
+                    std::copy(allPartitionsData + displacements[i], allPartitionsData + displacements[i] + partitionSizes[i], pdata);
+                    auto * partition = new ds::Partition<TYPE>(k, pdata, partitionSizes[i]);
+                    (*tables)[i]->addPartition(partition);
+                }
+
+                delete [] allPartitionsData;
+            }
+
+            // cleanup dynamic objects
+            delete [] tableInfoSizes;
+            delete [] displacements;
+            delete [] serializedTableInfo;
+            delete [] allInfosSerialized;
+            for (auto tInfo: tableInfos) {
+                delete tInfo;
+            }
+
+            return tables;
+        }
 
         /**
          * Table of each worker is distributed to every other worker in the group
          * all Tables are returned as a vector
          * Tables are listed in the vector with respect to their rankings
-         * vector[0] has the table from worker 0, vector[1] has the table from worker 1, and so on ...
+         * (*vector)[0] has the table from worker 0, (*vector)[1] has the table from worker 1, and so on ...
          *
          * Each partition of the tables are distributed separately, by using MPI allgather.
-         * If there are n partitions in worker tables, n mpi-allgather performed to distribute the tables
-         * two more all gathers are performed initially to exchage meta data
+         * If there are n partitions in worker tables, n mpi-allgather operation performed to distribute the tables
+         * two more all gather operations are performed initially to exchange meta data
          *
          * All tables in workers have to have the same number of partitions
          * otherwise, allgather is not performed with this method.
+         *
+         * When sending out partitions, no array copying is performed
+         * however, on receiving array copying parformed to create partitions
+         *  TODO: Avoid array copying on partition receive.
+         *      Currently each partition has a separate array.
+         *      Received data array has partitions of many tables.
+         *      So, a single array should be able have the data of many partitions
          *
          * @tparam TYPE
          * @param table
@@ -179,11 +319,15 @@ namespace harp::com {
          * Table of each worker is distributed to every worker in the group
          * all Tables are returned as a vector
          * Tables are listed in the vector with respect to their rankings
-         * vector[0] has the table from worker 0, vector[1] has the table from worker 1, and so on ...
+         * (*vector)[0] has the table from worker 0, (*vector)[1] has the table from worker 1, and so on ...
          *
          * Each table of every worker is first serialized as a single array,
          * then MPI allgather performed,
          * at the last step, all received serialized arrays are converted into Table objects again
+         *
+         * This version of allGather requires two array copies: one before sending and one after receiving
+         * so, it is not recommended for tables with large partitions
+         * They should use allGatherAsPartitions method instead
          *
          * @tparam TYPE
          * @param table
