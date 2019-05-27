@@ -17,7 +17,7 @@ namespace harp::worker {
 
         void start(int argc = 0, char *argv[] = NULL);
 
-        virtual void execute(com::Communicator *comm, int argc = 0, char *argv[] = NULL) = 0;
+        virtual void execute(comm::Communicator *comm, int argc = 0, char *argv[] = NULL) = 0;
 
         void setCommThreads(int comThreads);
 

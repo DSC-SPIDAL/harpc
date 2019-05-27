@@ -30,7 +30,7 @@ namespace harp::worker {
             printf("Worker should be initialized");
             return;
         }
-        com::Communicator comm(this->workerId, this->worldSize, this->comThreads);
+        comm::Communicator comm(this->workerId, this->worldSize, this->comThreads);
         this->execute(&comm, argc, argv);
         MPI_Finalize();
     }

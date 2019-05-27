@@ -11,7 +11,7 @@
 #include "../data_structures/DataStructures.h"
 #include "../util/ThreadPool.h"
 
-namespace harp::com {
+namespace harp::comm {
 
     class Communicator {
     private:
@@ -984,5 +984,5 @@ namespace harp::com {
         this->asyncTasks.push(std::move(rotateTaskFuture));
     }
 
-} // end of namespace harp::com
+} // end of namespace harp::comm
 #endif //HARPC_COMMUNICATOR_H

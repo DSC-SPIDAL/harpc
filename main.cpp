@@ -9,7 +9,7 @@
 
 using namespace std;
 using namespace harp::ds;
-using namespace harp::com;
+using namespace harp::comm;
 
 template<class TYPE>
 void printTable(int worker, Table<TYPE> *tab) {
