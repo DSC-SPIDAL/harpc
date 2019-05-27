@@ -11,7 +11,6 @@
 #include "../data_structures/DataStructures.h"
 #include "../util/ThreadPool.h"
 
-//todo doing implementation in header file due to templates problem
 namespace harp::com {
 
     class Communicator {
@@ -68,10 +67,10 @@ namespace harp::com {
         std::vector<ds::Table<TYPE> *> *allGatherAsOneArray(harp::ds::Table<TYPE> *table);
 
         template<class TYPE>
-        void allReduceAsOneArray(harp::ds::Table<TYPE> *table, MPI_Op operation);
+        void allReduceAsPartitions(harp::ds::Table<TYPE> *table, MPI_Op operation);
 
         template<class TYPE>
-        void allReduceAsPartitions(harp::ds::Table<TYPE> *table, MPI_Op operation);
+        void allReduceAsOneArray(harp::ds::Table<TYPE> *table, MPI_Op operation);
 
         template<class TYPE>
         void broadcastAsPartitions(harp::ds::Table<TYPE> *table, int bcastWorkerId);
