@@ -4,8 +4,15 @@ project(harp_data_structures)
 include_directories(${MPI_INCLUDE_PATH})
 
 add_library(
-        harp_data_structures
+        harp_data_structures STATIC
         TableInfo.cpp)
+
+target_include_directories(harp_data_structures PUBLIC
+        ${MPI_INCLUDE_PATH}
+        ../utils
+        ../thirdparty
+        )
+
 
 #target_link_libraries(
 #        harp_data_structures INTERFACE

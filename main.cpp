@@ -121,7 +121,7 @@ class MyWorker : public harp::worker::Worker {
             cout << "tables after gather at worker: " << workerId  << endl;
             for (auto * table : *tables) {
                 printTable(table->getId(), table);
-//                harp::util::print::printTable(table);
+//                harp::utils::print::printTable(table);
             }
         }
 
@@ -141,7 +141,7 @@ class MyWorker : public harp::worker::Worker {
             cout << "tables after all gather at worker: " << workerId << endl;
             for (auto * table : *tables) {
                 printTable(table->getId(), table);
-//                harp::util::print::printTable(table);
+//                harp::utils::print::printTable(table);
             }
         }
 

@@ -94,7 +94,7 @@ class KMeansWorker : public worker::Worker {
             auto *centroids = new ds::Table<double>(1);
             util::readKMeansDataFromFile("/tmp/harp/kmeans/centroids", vectorSize, centroids);
 
-//            util::print::printTable(centroids);
+//            utils::print::printTable(centroids);
 
             record(TIME_BEFORE_SERIAL);
             kernels::calculateKMeans(centroids, points, vectorSize, iterations);
@@ -102,8 +102,8 @@ class KMeansWorker : public worker::Worker {
 
             cout << "Time for serial calculation: " << diff(TIME_BEFORE_SERIAL, TIME_AFTER_SERIAL) << endl;
 
-//            util::print::printTable(centroids);
-//            util::print::printPartition(centroids->getPartition(0));
+//            utils::print::printTable(centroids);
+//            utils::print::printPartition(centroids->getPartition(0));
 
             ds::util::deleteTable(points, true);
             ds::util::deleteTable(centroids, true);
@@ -240,7 +240,7 @@ class KMeansWorker : public worker::Worker {
                                                         total(TIME_ASYNC_ROTATE_BEGIN, TIME_ASYNC_ROTATE_END) -
                                                         diff(TIME_BEFORE_WAIT, TIME_AFTER_WAIT) << endl;
 
-//            util::print::printTable(myCentroids);
+//            utils::print::printTable(myCentroids);
             //printPartition(centroids->getPartition(0));
         }
 

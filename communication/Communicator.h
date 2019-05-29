@@ -6,10 +6,10 @@
 #include "mpi.h"
 #include "future"
 
-#include "../util/print.h"
-#include "../util/timing.h"
+#include "../utils/print.h"
+#include "../utils/timing.h"
 #include "../data_structures/DataStructures.h"
-#include "../util/ThreadPool.h"
+#include "../utils/ThreadPool.h"
 
 using namespace harp::ds;
 

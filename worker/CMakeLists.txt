@@ -1,11 +1,11 @@
 cmake_minimum_required(VERSION 3.12)
 project(harp_worker)
 
-include_directories(
+add_library(harp_worker STATIC Worker.cpp)
+
+target_include_directories(harp_worker PUBLIC
         ${MPI_INCLUDE_PATH}
 )
-
-add_library(harp_worker Worker.cpp)
 
 
 FILE(GLOB PUBLIC_HEADERS *.h)
