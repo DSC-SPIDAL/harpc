@@ -7,14 +7,3 @@ target_include_directories(harp_worker PUBLIC
         ${MPI_INCLUDE_PATH}
 )
 
-
-FILE(GLOB PUBLIC_HEADERS *.h)
-
-INSTALL(FILES ${PUBLIC_HEADERS}
-        DESTINATION include/worker)
-
-INSTALL(
-        TARGETS harp_worker
-        ARCHIVE DESTINATION lib
-        LIBRARY DESTINATION lib
-)

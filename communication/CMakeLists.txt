@@ -7,12 +7,3 @@ add_library(
         harp_communication INTERFACE
 )
 
-FILE(GLOB PUBLIC_HEADERS *.h)
-
-INSTALL(FILES ${PUBLIC_HEADERS}
-        DESTINATION include/communication)
-
-INSTALL(
-        TARGETS harp_communication
-        LIBRARY DESTINATION lib
-)

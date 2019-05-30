@@ -1429,6 +1429,7 @@ int main(int argc, char** argv)
     MPI_Comm_size(MPI_COMM_WORLD, &nprocs);
     MPI_Comm_rank(MPI_COMM_WORLD, &myrank);
     isDistri = true;
+    std::cout << "Starting Distributed Sub Graph Counting. MPI initialized. MyRank: " << myrank << std::endl;
 #endif
 
     CSRGraph* csrInputG = nullptr;

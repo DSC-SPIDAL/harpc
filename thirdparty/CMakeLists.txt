@@ -47,14 +47,3 @@ target_include_directories(harp_thirdparty PUBLIC
         radix/commons
         )
 
-
-FILE(GLOB PUBLIC_HEADERS *.h)
-
-INSTALL(FILES ${PUBLIC_HEADERS}
-        DESTINATION include/thirdparty)
-
-INSTALL(
-        TARGETS harp_thirdparty
-        ARCHIVE DESTINATION lib
-        LIBRARY DESTINATION lib
-)

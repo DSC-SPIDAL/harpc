@@ -1,6 +1,16 @@
 cmake_minimum_required(VERSION 3.12)
 project(harp_examples)
 
+# whether distributed version will be compiled
+# comment out these lines for non-idistributed
+set(DISTRI yes)
+set(CMAKE_CXX_FLAGS "-DDISTRI ${CMAKE_CXX_FLAGS}")
+
+# whether it will be verbose
+# comment out these lines for non-verbose
+set(VERBOSE yes)
+set(CMAKE_CXX_FLAGS "-DVERBOSE ${CMAKE_CXX_FLAGS}")
+
 add_executable(harp_examples
         subgraph/sc-main.cpp
         subgraph/CountMat.cpp
@@ -10,9 +20,6 @@ add_executable(harp_examples
         subgraph/Graph.cpp
         subgraph/IndexSys.cpp
         )
-
-# target_compile_definitions (harp_examples PRIVATE MKL_ILP64)
-# target_compile_options(harp_examples PRIVATE -I${MKLROOT}/include)
 
 target_include_directories(harp_examples PUBLIC
         ../data_structures
@@ -29,18 +36,5 @@ target_link_libraries(
         ${Boost_LIBRARIES}
         ${BLAS_LIBRARIES}
         OpenMP::OpenMP_CXX
-)
-
-
-FILE(GLOB PUBLIC_HEADERS *.h)
-
-INSTALL(FILES ${PUBLIC_HEADERS}
-        DESTINATION include/examples)
-
-INSTALL(
-        TARGETS harp_examples
-        RUNTIME DESTINATION bin
-        LIBRARY DESTINATION lib
-        PUBLIC_HEADER DESTINATION include
 )
 
